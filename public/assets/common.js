@@ -16,9 +16,11 @@ async function loadOverview() {
   const r = await api('/app/api/overview');
   if (!r.success) {
     // Only session loss should bounce to login; other errors surface to the caller.
-    if (r.code === 'HTTP_401' || r.code === 'UNAUTHORIZED') { location.href = '/login'; }
+    if (r.code === 'HTTP_401' || r.code === 'UNAUTHORIZED') { location.href = '/login'; return null; }
     throw new Error(r.message || 'Gagal memuat data');
-    return;
   }
   return r.data;
+}
+function setActiveNav(view) {
+  document.querySelectorAll('.nav').forEach(a => a.classList.toggle('active', a.dataset.view === view));
 }

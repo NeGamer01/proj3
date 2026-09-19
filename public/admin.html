@@ -49,11 +49,16 @@ function renderError(msg) {
 
 async function render(view) {
   title.textContent = TITLES[view] || view;
+  setActiveNav(view);
+  content.innerHTML = `<p class="muted">Memuat…</p>`;
   let ov;
   try {
     ov = await loadOverview();
-  } catch (e) { ov = null; }
-  if (!ov) return;
+  } catch (e) {
+    renderError(e.message);
+    return;
+  }
+  if (!ov) return; // bounced to /login
   document.getElementById('whoami').textContent = ov.user.email;
   content.innerHTML = `<p class="muted">Memuat ${TITLES[view] || view}…</p>`;
   const fn = ({ overview: renderOverview, users: renderUsers, plans: renderPlans, providers: renderProviders, orders: renderOrders, qris: renderQris, withdrawals: renderWithdrawals, unmatched: renderUnmatched, logs: renderLogs })[view];

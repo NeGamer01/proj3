@@ -4,11 +4,17 @@ body { margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, san
 .qr-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 26px; text-align: center; max-width: 380px; width: 100%; }
 .qr-card h2 { margin: 0 0 4px; }
 .qr-card .amt { font-size: 28px; font-weight: 700; margin: 10px 0; }
-.qr-card .ref { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
-.qr-card img { width: 280px; height: 280px; background: #fff; padding: 10px; border-radius: 10px; }
+.qr-card .ref { color: var(--muted); font-size: 12px; margin-bottom: 16px; word-break: break-all; }
+.qr-card img { width: 280px; height: 280px; background: #fff; padding: 10px; border-radius: 10px; display: block; margin: 0 auto; }
 .qr-card .status { margin-top: 14px; font-weight: 600; }
 .qr-card .status.paid { color: var(--ok); }
 .qr-card .status.expired { color: #ef4444; }
 .qr-card .countdown { color: var(--muted); font-size: 13px; margin-top: 6px; }
 .qr-card .btn { display: inline-block; margin-top: 14px; background: var(--accent); color: #fff; padding: 9px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; }
-.qr-card .meta { color: var(--muted); font-size: 12px; margin-top: 12px; }
+.qr-card .meta { color: var(--muted); font-size: 12px; margin-top: 12px; word-break: break-all; }
+
+@media (max-width: 420px) {
+  .qr-card { padding: 18px; }
+  .qr-card .amt { font-size: 24px; }
+  .qr-card img { width: 220px; height: 220px; }
+}

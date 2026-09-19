@@ -37,13 +37,16 @@
 const api = (p, o) => fetch('/app/api/auth/' + p, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(o) }).then(r => r.json());
 const msg = document.getElementById('msg');
 function show(m, ok){ msg.textContent = m; msg.className = 'msg ' + (ok ? 'ok' : 'err'); }
+function disableForms(on) { document.querySelectorAll('.btn').forEach(b => { b.disabled = on; }); }
 document.getElementById('form-login').addEventListener('submit', async e => {
-  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const r = await api('login', f);
-  if (r.success) location.href = '/'; else show(r.message || 'Gagal login', false);
+  e.preventDefault(); const btn = e.target.querySelector('.btn'); disableForms(true); btn.textContent = 'Memuat…';
+  const f = Object.fromEntries(new FormData(e.target)); const r = await api('login', f);
+  if (r.success) location.href = '/'; else { show(r.message || 'Gagal login', false); disableForms(false); btn.textContent = 'Login'; }
 });
 document.getElementById('form-register').addEventListener('submit', async e => {
-  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const r = await api('register', f);
-  if (r.success) location.href = '/'; else show(r.message || 'Gagal daftar', false);
+  e.preventDefault(); const btn = e.target.querySelector('.btn'); disableForms(true); btn.textContent = 'Memuat…';
+  const f = Object.fromEntries(new FormData(e.target)); const r = await api('register', f);
+  if (r.success) location.href = '/'; else { show(r.message || 'Gagal daftar', false); disableForms(false); btn.textContent = 'Daftar'; }
 });
 document.getElementById('to-register').onclick = (e) => { e.preventDefault(); document.getElementById('mode-login').hidden = true; document.getElementById('mode-register').hidden = false; show(''); };
 document.getElementById('to-login').onclick = (e) => { e.preventDefault(); document.getElementById('mode-register').hidden = true; document.getElementById('mode-login').hidden = false; show(''); };
