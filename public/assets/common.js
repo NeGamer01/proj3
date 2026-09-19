@@ -14,6 +14,11 @@ function tag(status) {
 }
 async function loadOverview() {
   const r = await api('/app/api/overview');
-  if (!r.success) { location.href = '/login'; return; }
+  if (!r.success) {
+    // Only session loss should bounce to login; other errors surface to the caller.
+    if (r.code === 'HTTP_401' || r.code === 'UNAUTHORIZED') { location.href = '/login'; }
+    throw new Error(r.message || 'Gagal memuat data');
+    return;
+  }
   return r.data;
 }

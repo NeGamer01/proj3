@@ -43,13 +43,22 @@ const TITLES = { overview:'Overview', users:'Pengguna', plans:'Paket Langganan',
 document.getElementById('logout').onclick = async (e) => { e.preventDefault(); await api('/app/api/auth/logout', { method: 'POST' }); location.href = '/'; };
 document.querySelectorAll('.nav').forEach(a => a.onclick = (e) => { e.preventDefault(); const v = a.dataset.view; location.hash = v; render(v); });
 
+function renderError(msg) {
+  content.innerHTML = `<div class="panel"><h3>Gagal memuat</h3><p class="msg err">${esc(msg || 'Terjadi kesalahan')}</p><button class="btn sec" onclick="location.reload()">Muat ulang</button></div>`;
+}
+
 async function render(view) {
   title.textContent = TITLES[view] || view;
-  const ov = await loadOverview();
+  let ov;
+  try {
+    ov = await loadOverview();
+  } catch (e) { ov = null; }
   if (!ov) return;
   document.getElementById('whoami').textContent = ov.user.email;
-  content.innerHTML = '';
-  ({ overview: renderOverview, users: renderUsers, plans: renderPlans, providers: renderProviders, orders: renderOrders, qris: renderQris, withdrawals: renderWithdrawals, unmatched: renderUnmatched, logs: renderLogs }[view] || renderOverview)(ov);
+  content.innerHTML = `<p class="muted">Memuat ${TITLES[view] || view}…</p>`;
+  const fn = ({ overview: renderOverview, users: renderUsers, plans: renderPlans, providers: renderProviders, orders: renderOrders, qris: renderQris, withdrawals: renderWithdrawals, unmatched: renderUnmatched, logs: renderLogs })[view];
+  if (!fn) { content.innerHTML = `<p class="muted">Menu tidak dikenal: ${esc(view)}</p>`; return; }
+  try { fn(ov); } catch (e) { renderError(e.message); }
 }
 
 async function admin(path, opts) { const r = await api('/admin/api' + path, opts); return r; }

@@ -29,13 +29,38 @@ label small { color: var(--muted); }
 
 /* layout */
 .layout { display: flex; min-height: 100vh; }
-.sidebar { width: 230px; background: var(--panel); border-right: 1px solid var(--line); padding: 18px 14px; position: sticky; top: 0; height: 100vh; overflow: auto; }
+.sidebar { width: 230px; flex: 0 0 230px; background: var(--panel); border-right: 1px solid var(--line); padding: 18px 14px; position: sticky; top: 0; height: 100vh; overflow: auto; }
 .sidebar h1 { font-size: 18px; margin-bottom: 18px; }
 .sidebar nav a { display: block; padding: 8px 10px; border-radius: 6px; color: var(--text); margin-bottom: 2px; }
 .sidebar nav a:hover { background: var(--panel2); }
-.main { flex: 1; padding: 22px; max-width: 1100px; }
-.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.main { flex: 1; padding: 22px; max-width: 1100px; margin: 0 auto; width: 100%; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
 .topbar .user { color: var(--muted); font-size: 13px; }
+
+/* mobile sidebar: bottom nav bar instead of side panel */
+@media (max-width: 860px) {
+  .layout { flex-direction: column-reverse; }
+  .sidebar {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%; height: auto; max-height: 60vh;
+    border-right: 0; border-top: 1px solid var(--line);
+    padding: 10px 12px 14px; z-index: 100;
+    box-shadow: 0 -6px 24px rgba(0,0,0,.35);
+  }
+  .sidebar h1 { font-size: 15px; margin-bottom: 8px; }
+  .sidebar nav { display: flex; flex-wrap: wrap; gap: 4px; }
+  .sidebar nav a { padding: 6px 9px; font-size: 12.5px; margin-bottom: 0; border: 1px solid var(--line); }
+  .main { padding: 14px 14px 90px; max-width: 100%; }
+  /* tables scroll horizontally instead of breaking layout */
+  .panel, .grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 640px; }
+}
+
+@media (max-width: 520px) {
+  .card .val { font-size: 17px; }
+  .grid { grid-template-columns: 1fr; }
+  .sidebar nav a { font-size: 12px; padding: 5px 8px; }
+}
 
 /* cards */
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }

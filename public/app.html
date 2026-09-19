@@ -38,12 +38,19 @@ const TITLES = { overview: 'Overview', balance: 'Saldo & Withdraw', qris: 'Invoi
 document.getElementById('logout').onclick = async (e) => { e.preventDefault(); await api('/app/api/auth/logout', { method: 'POST' }); location.href = '/'; };
 document.querySelectorAll('.nav').forEach(a => a.onclick = (e) => { e.preventDefault(); const v = a.dataset.view; location.hash = v; render(v); });
 
+function renderError(msg) {
+  content.innerHTML = `<div class="panel"><h3>Gagal memuat</h3><p class="msg err">${esc(msg || 'Terjadi kesalahan')}</p><button class="btn sec" onclick="location.reload()">Muat ulang</button></div>`;
+}
+
 async function render(view) {
   title.textContent = TITLES[view] || view;
-  const ov = await loadOverview();
+  let ov;
+  try {
+    ov = await loadOverview();
+  } catch (e) { ov = null; }
   if (!ov) return;
   document.getElementById('whoami').textContent = ov.user.email;
-  content.innerHTML = '';
+  content.innerHTML = `<p class="muted">Memuat ${TITLES[view] || view}…</p>`;
   if (view === 'overview') return renderOverview(ov);
   if (view === 'balance') return renderBalance(ov);
   if (view === 'qris') return renderQris(ov);
