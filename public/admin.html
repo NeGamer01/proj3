@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QRISPay — Admin</title>
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h1>QRISPay</h1>
+    <div class="badge">ADMIN</div>
+    <nav>
+      <a href="#overview" class="nav" data-view="overview">Overview</a>
+      <a href="#users" class="nav" data-view="users">Pengguna</a>
+      <a href="#plans" class="nav" data-view="plans">Paket</a>
+      <a href="#providers" class="nav" data-view="providers">Provider & OTP</a>
+      <a href="#orders" class="nav" data-view="orders">Order</a>
+      <a href="#qris" class="nav" data-view="qris">Invoice</a>
+      <a href="#withdrawals" class="nav" data-view="withdrawals">Withdraw</a>
+      <a href="#unmatched" class="nav" data-view="unmatched">Unmatched</a>
+      <a href="#logs" class="nav" data-view="logs">Logs</a>
+      <a href="/app">← Dashboard User</a>
+      <a href="/docs" target="_blank">Dokumentasi</a>
+      <a href="#" id="logout">Logout</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h2 id="view-title">Overview</h2>
+      <div class="user" id="whoami"></div>
+    </div>
+    <div id="content"></div>
+  </main>
+</div>
+<script src="/assets/common.js"></script>
+<script>
+const content = document.getElementById('content');
+const title = document.getElementById('view-title');
+const TITLES = { overview:'Overview', users:'Pengguna', plans:'Paket Langganan', providers:'Provider & OTP', orders:'Order', qris:'Invoice', withdrawals:'Withdraw', unmatched:'Unmatched', logs:'Logs' };
+
+document.getElementById('logout').onclick = async (e) => { e.preventDefault(); await api('/app/api/auth/logout', { method: 'POST' }); location.href = '/'; };
+document.querySelectorAll('.nav').forEach(a => a.onclick = (e) => { e.preventDefault(); const v = a.dataset.view; location.hash = v; render(v); });
+
+async function render(view) {
+  title.textContent = TITLES[view] || view;
+  const ov = await loadOverview();
+  if (!ov) return;
+  document.getElementById('whoami').textContent = ov.user.email;
+  content.innerHTML = '';
+  ({ overview: renderOverview, users: renderUsers, plans: renderPlans, providers: renderProviders, orders: renderOrders, qris: renderQris, withdrawals: renderWithdrawals, unmatched: renderUnmatched, logs: renderLogs }[view] || renderOverview)(ov);
+}
+
+async function admin(path, opts) { const r = await api('/admin/api' + path, opts); return r; }
+
+function renderOverview(d) {
+  const c = d.counts, rev = d.revenue_30d, provs = (d.providers||[]).map(p => `<div class="card"><div class="lbl">${esc(p.name)}</div><div class="val" style="font-size:14px">${p.implemented ? esc(p.summary?.status||'active') : 'segera'}</div><div class="sub">${p.summary?.merchant_id||'-'}${p.summary?.outlet_name?' · '+esc(p.summary.outlet_name):''}</div></div>`).join('');
+  content.innerHTML = `
+    <div class="grid">
+      <div class="card"><div class="lbl">Pengguna</div><div class="val">${c.users}</div><div class="sub">${c.blocked} diblokir</div></div>
+      <div class="card"><div class="lbl">Langganan Aktif</div><div class="val">${c.active_subs}</div><div class="sub">subscriber</div></div>
+      <div class="card"><div class="lbl">API Keys Aktif</div><div class="val">${c.api_keys}</div></div>
+      <div class="card"><div class="lbl">Invoice Pending</div><div class="val">${c.pending_invoices}</div></div>
+      <div class="card"><div class="lbl">Withdraw Menunggu</div><div class="val">${c.pending_withdrawals}</div></div>
+      <div class="card"><div class="lbl">Pendapatan 30d</div><div class="val">${money(rev.total)}</div><div class="sub">${rev.orders} order</div></div>
+    </div>
+    <div class="panel"><h3>Provider</h3><div class="grid">${provs}</div></div>
+    <div class="panel"><h3>Withdraw Menunggu Proses</h3>${(d.pending_withdrawals||[]).length ? `<table><thead><tr><th>ID</th><th>User</th><th>Nominal</th><th>Bank</th><th></th></tr></thead><tbody>${(d.pending_withdrawals||[]).map(w => `<tr><td>${esc(w.id)}</td><td>${esc(w.user_email)}</td><td>${money(w.amount)}</td><td>${esc(w.bank_detail?.bank_name)} ${esc(w.bank_detail?.account_number)}</td><td><button class="btn sec" data-proc="${esc(w.id)}">Proses</button></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Tidak ada</p>'}</div>
+    <div class="panel"><h3>Order Terbaru</h3><table><thead><tr><th>ID</th><th>Paket</th><th>Nominal</th><th>Status</th></tr></thead><tbody>${(d.recent_orders||[]).map(o => `<tr><td>${esc(o.id)}</td><td>${esc(o.plan_name)}</td><td>${money(o.amount)}</td><td>${tag(o.status)}</td></tr>`).join('')}</tbody></table></div>
+  `;
+  document.querySelectorAll('[data-proc]').forEach(b => b.onclick = async () => { const r = await admin('/withdrawals/' + b.dataset.proc + '/process', { method: 'POST' }); if (r.success) render('overview'); else alert(r.message); });
+}
+
+function renderUsers() {
+  content.innerHTML = `
+    <div class="panel">
+      <form id="su" class="form row"><input name="q" placeholder="Cari email / nama…"><button class="btn" type="submit">Cari</button></form>
+    </div>
+    <div class="panel"><div id="ul"></div></div>
+    <div class="panel" id="ud" style="display:none"></div>
+  `;
+  document.getElementById('su').addEventListener('submit', e => { e.preventDefault(); loadUsers(new FormData(e.target).get('q')); });
+  async function loadUsers(q) {
+    const r = await admin('/users' + (q ? '?q=' + encodeURIComponent(q) : ''));
+    document.getElementById('ul').innerHTML = `<table><thead><tr><th>ID</th><th>Email</th><th>Nama</th><th>Saldo</th><th>Langganan</th><th>Status</th><th></th></tr></thead><tbody>${(r.data||[]).map(u => `<tr><td>${u.id}</td><td><a href="#" data-uid="${u.id}">${esc(u.email)}</a></td><td>${esc(u.name||'')}</td><td>${money(u.balance)}<br><span class="muted">held ${money(u.held)}</span></td><td>${u.subscription_active ? tag('active') : tag('EXPIRED')}</td><td>${tag(u.status)}</td><td>${u.status==='active'?`<button class="btn danger" data-blk="${u.id}">Blokir</button>`:`<button class="btn sec" data-blk="${u.id}">Buka</button>`}</td></tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('[data-uid]').forEach(a => a.onclick = e => { e.preventDefault(); loadUser(a.dataset.uid); });
+    document.querySelectorAll('[data-blk]').forEach(b => b.onclick = async () => { const tgt = (await admin('/users')).data.find(x=>x.id==b.dataset.blk); const status = tgt.status==='active'?'blocked':'active'; await admin('/users/' + b.dataset.blk + '/status', { method: 'POST', body: JSON.stringify({ status }) }); loadUsers(); });
+  }
+  async function loadUser(id) {
+    const r = await admin('/users/' + id); const d = r.data; if (!d) return;
+    document.getElementById('ud').style.display = '';
+    document.getElementById('ud').innerHTML = `
+      <h3>${esc(d.user.email)} <span class="muted">· ${d.user.role}</span></h3>
+      <div class="grid">
+        <div class="card"><div class="lbl">Saldo</div><div class="val">${money(d.balance.balance)}</div><div class="sub">held ${money(d.balance.held)}</div></div>
+        <div class="card"><div class="lbl">Langganan</div><div class="val" style="font-size:14px">${esc(d.subscription.plan||'-')}</div><div class="sub">${d.subscription.active?'Aktif':'Tidak'}</div></div>
+      </div>
+      <div class="panel"><h4>Beri Langganan Manual</h4><form id="gr" class="form row"><input name="days" type="number" min="1" max="3650" placeholder="hari (1–3650)" required><input name="note" placeholder="catatan"><button class="btn" type="submit">Beri</button></form></div>
+      <div class="panel"><h4>Reset Password</h4><form id="pw" class="form row"><input name="password" type="password" placeholder="password baru (min 8)" required><button class="btn sec" type="submit">Reset</button></form></div>
+      <div class="panel"><h4>API Keys</h4><table><tr><th>Prefix</th><th>Label</th><th>Status</th></tr>${(d.api_keys||[]).map(k=>`<tr><td><code>${esc(k.key_prefix)}</code></td><td>${esc(k.label||'')}</td><td>${tag(k.active?'active':'blocked')}</td></tr>`).join('')}</table></div>
+      <div class="panel"><h4>Invoice Terbaru</h4><table><tr><th>ID</th><th>Provider</th><th>Total</th><th>Status</th></tr>${(d.recent_invoices||[]).map(i=>`<tr><td>${esc(i.qris_id||i.id)}</td><td>${esc(i.provider)}</td><td>${money(i.total_amount||i.amount)}</td><td>${tag(i.status)}</td></tr>`).join('')}</table></div>
+      <div class="panel"><h4>Ledger</h4><table><tr><th>Waktu</th><th>Tipe</th><th>Nominal</th><th>Saldo</th></tr>${(d.ledger||[]).map(e=>`<tr><td class="muted">${new Date(e.created_at+'Z').toLocaleString('id-ID')}</td><td>${esc(e.type)}</td><td>${money(e.amount)}</td><td>${money(e.balance_after)}</td></tr>`).join('')}</table></div>
+    `;
+    document.getElementById('gr').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const rr = await admin('/users/'+id+'/subscription', { method:'POST', body: JSON.stringify({ days: Number(f.days), note: f.note }) }); alert(rr.success?'Langganan diberikan':rr.message); loadUser(id); };
+    document.getElementById('pw').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const rr = await admin('/users/'+id+'/password', { method:'POST', body: JSON.stringify({ password: f.password }) }); alert(rr.success?'Password direset':rr.message); };
+  }
+  loadUsers();
+}
+
+function renderPlans() {
+  (async () => {
+    const r = await admin('/plans');
+    content.innerHTML = `
+      <div class="panel"><h3>Paket Baru</h3>
+        <form id="np" class="form">
+          <div class="row"><label>Nama<input name="name" required></label><label>Harga<input name="price" type="number" min="0" required></label></div>
+          <div class="row"><label>Durasi (hari)<input name="duration_days" type="number" min="1" required></label>
+            <label>Tier<select name="tier"><option value="H0">H0 (GoPay)</option><option value="H1">H1 (ShopeePay)</option></select></label></div>
+          <label>Provider (pisah koma)<input name="providers" placeholder="gopay,shopeepay" required></label>
+          <label>Deskripsi<input name="description"></label>
+          <button class="btn" type="submit">Simpan</button>
+        </form><p id="np-msg" class="msg"></p>
+      </div>
+      <div class="panel"><h3>Daftar Paket</h3><table><thead><tr><th>ID</th><th>Nama</th><th>Tier</th><th>Provider</th><th>Harga</th><th>Durasi</th><th>Aktif</th></tr></thead><tbody id="pl"></tbody></table></div>
+    `;
+    function fill(rows) { document.getElementById('pl').innerHTML = rows.map(p => `<tr><td>${p.id}</td><td>${esc(p.name)}</td><td>${esc(p.tier)}</td><td>${esc((p.providers||[]).join(', '))}</td><td>${money(p.price)}</td><td>${p.duration_days}h</td><td>${tag(p.active?'active':'EXPIRED')}</td></tr>`).join(''); }
+    fill(r.data||[]);
+    document.getElementById('np').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const rr = await admin('/plans', { method:'POST', body: JSON.stringify({ ...f, price: Number(f.price), duration_days: Number(f.duration_days), providers: f.providers.split(',').map(s=>s.trim()).filter(Boolean), active: true }) }); const msg = document.getElementById('np-msg'); msg.textContent = rr.success?'Tersimpan':(rr.message||'Gagal'); msg.className='msg '+(rr.success?'ok':'err'); if (rr.success) fill((await admin('/plans')).data); };
+  })();
+}
+
+function renderProviders() {
+  (async () => {
+    const r = await admin('/providers');
+    content.innerHTML = `<div id="pv"></div>`;
+    const rows = r.data||[];
+    document.getElementById('pv').innerHTML = rows.map(p => `
+      <div class="panel">
+        <h3>${esc(p.name)} ${tag(p.summary?.status || (p.implemented?'active':'unconfigured'))}</h3>
+        <div class="grid">
+          <div class="card"><div class="lbl">Merchant</div><div class="val" style="font-size:14px">${esc(p.summary?.merchant_id || '-')}</div></div>
+          <div class="card"><div class="lbl">Outlet</div><div class="val" style="font-size:14px">${esc(p.summary?.outlet_name || '-')}</div></div>
+          <div class="card"><div class="lbl">Telepon</div><div class="val" style="font-size:14px">${esc(p.summary?.phone_number || '-')}</div></div>
+        </div>
+        <div class="panel">
+          <h4>QRIS Statis</h4>
+          <form id="sq-${esc(p.name)}" class="form row">
+            <input name="qris_static" placeholder="000201010212..." value="${esc(p.summary?.qris_configured ? '****terpasang' : '')}">
+            <button class="btn" type="submit">Pasang</button>
+          </form>
+          <p class="hint">Tempel QRIS statis dari akun operator ${esc(p.name)} (yang diterima pembayaran). Format EMVCo 000201….</p>
+        </div>
+        ${p.implemented ? `
+        <div class="panel">
+          <h4>Login OTP (${esc(p.name)})</h4>
+          <form id="ot-${esc(p.name)}" class="form">
+            <div class="row"><label>Nomor telepon (62…)<input name="phone" placeholder="62812…" required></label></div>
+            <button class="btn" type="submit">Minta OTP</button>
+          </form>
+          <p id="ot-msg-${esc(p.name)}" class="msg"></p>
+          <form id="vf-${esc(p.name)}" class="form" style="display:none">
+            <div class="row">
+              <input name="otp_token" placeholder="otp_token dari respons" required>
+              <input name="otp" placeholder="kode OTP" required>
+            </div>
+            <button class="btn sec" type="submit">Verifikasi</button>
+          </form>
+        </div>` : '<p class="muted">Provider ini belum diimplementasi (Phase 2).</p>'}
+      </div>
+    `).join('');
+    rows.forEach(p => {
+      const nm = p.name;
+      const sq = document.getElementById('sq-'+nm); if (sq) sq.onsubmit = async e => { e.preventDefault(); const v = new FormData(e.target).get('qris_static'); const rr = await admin('/providers/'+nm+'/static-qris', { method:'PUT', body: JSON.stringify({ qris_static: v.startsWith('****')?'':v }) }); alert(rr.success?'QRIS statis dipasang':(rr.message||'Gagal')); render('providers'); };
+      const ot = document.getElementById('ot-'+nm); if (!ot) return;
+      ot.onsubmit = async e => { e.preventDefault(); const phone = new FormData(e.target).get('phone'); const rr = await admin('/providers/'+nm+'/otp', { method:'POST', body: JSON.stringify({ phone }) }); const msg = document.getElementById('ot-msg-'+nm); if (rr.success) { msg.textContent='OTP diminta. otp_token tersimpan.'; msg.className='msg ok'; document.getElementById('vf-'+nm).style.display=''; document.getElementById('vf-'+nm).dataset.token = rr.data.otp_token || ''; } else { msg.textContent = rr.message||'Gagal'; msg.className='msg err'; } };
+      const vf = document.getElementById('vf-'+nm); if (!vf) return;
+      vf.onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const rr = await admin('/providers/'+nm+'/verify', { method:'POST', body: JSON.stringify({ phone: document.getElementById('ot-'+nm).querySelector('[name=phone]').value, otp_token: f.otp_token, otp: f.otp }) }); alert(rr.success?'Login OK, provider aktif':(rr.message||'Gagal')); if (rr.success) render('providers'); };
+    });
+  })();
+}
+
+function renderOrders() {
+  (async () => {
+    const r = await admin('/orders');
+    content.innerHTML = `<div class="panel"><h3>Order Langganan</h3><table><thead><tr><th>ID</th><th>User</th><th>Paket</th><th>Nominal</th><th>Status</th><th></th></tr></thead><tbody>${(r.data||[]).map(o=>`<tr><td>${esc(o.id)}</td><td>${esc(o.user_email||'-')}</td><td>${esc(o.plan_name)}</td><td>${money(o.amount)}</td><td>${tag(o.status)}</td><td>${o.status==='PENDING'?`<button class="btn sec" data-set="${esc(o.id)}">Settle</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelectorAll('[data-set]').forEach(b => b.onclick = async () => { const rr = await admin('/orders/'+b.dataset.set+'/settle', { method:'POST' }); alert(rr.success?'Order di-settle':(rr.message||'Gagal')); render('orders'); });
+  })();
+}
+
+function renderQris() {
+  (async () => {
+    const r = await admin('/qris');
+    content.innerHTML = `<div class="panel"><h3>Semua Invoice</h3><table><thead><tr><th>ID</th><th>User</th><th>Provider</th><th>Base</th><th>Unik</th><th>Total</th><th>Kind</th><th>Status</th><th>Waktu</th><th></th></tr></thead><tbody>${(r.data||[]).map(i=>`<tr><td>${esc(i.id)}</td><td>${esc(i.email)}</td><td>${esc(i.provider)}</td><td>${money(i.base_amount)}</td><td>${i.unique_code}</td><td>${money(i.total_amount)}</td><td>${esc(i.kind)}</td><td>${tag(i.status)}</td><td class="muted">${new Date(i.created_at+'Z').toLocaleString('id-ID')}</td><td>${i.status==='PENDING'?`<button class="btn sec" data-mp="${esc(i.id)}">Mark Paid</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelectorAll('[data-mp]').forEach(b => b.onclick = async () => { const rr = await admin('/qris/'+b.dataset.mp+'/mark-paid', { method:'POST' }); alert(rr.success?'Ditandai lunas':(rr.message||'Gagal')); render('qris'); });
+  })();
+}
+
+function renderWithdrawals() {
+  (async () => {
+    const r = await admin('/withdrawals');
+    content.innerHTML = `<div class="panel"><h3>Antrian Withdraw</h3><table><thead><tr><th>ID</th><th>User</th><th>Nominal</th><th>Bank</th><th>Status</th><th>Waktu</th><th></th></tr></thead><tbody>${(r.data||[]).map(w=>`<tr><td>${esc(w.id)}</td><td>${esc(w.user_email)}</td><td>${money(w.amount)}</td><td>${esc(w.bank_detail?.bank_name)} ${esc(w.bank_detail?.account_number)}<br><span class="muted">${esc(w.bank_detail?.account_name)}</span></td><td>${tag(w.status)}</td><td class="muted">${new Date(w.created_at+'Z').toLocaleString('id-ID')}</td><td>${w.status==='requested'?`<button class="btn sec" data-proc="${esc(w.id)}">Proses</button> <button class="btn danger" data-rej="${esc(w.id)}">Tolak</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelectorAll('[data-proc]').forEach(b => b.onclick = async () => { const rr = await admin('/withdrawals/'+b.dataset.proc+'/process', { method:'POST' }); if (!rr.success) alert(rr.message); render('withdrawals'); });
+    document.querySelectorAll('[data-rej]').forEach(b => b.onclick = async () => { const reason = prompt('Alasan tolak?'); const rr = await admin('/withdrawals/'+b.dataset.rej+'/reject', { method:'POST', body: JSON.stringify({ reason }) }); if (!rr.success) alert(rr.message); render('withdrawals'); });
+  })();
+}
+
+function renderUnmatched() {
+  (async () => {
+    const r = await admin('/unmatched');
+    content.innerHTML = `<div class="panel"><h3>Pembayaran Tidak Ter-cook</h3><p class="hint">Pembayaran masuk yang tidak ada invoice cocok (lewat grace window). Resolve manual ke invoice yang dimaksud, atau biarkan untuk rekonsiliasi.</p><table><thead><tr><th>ID</th><th>Provider</th><th>Amount</th><th>TxID</th><th>Waktu</th><th></th></tr></thead><tbody>${(r.data||[]).map(u=>`<tr><td>${u.id}</td><td>${esc(u.provider)}</td><td>${money(u.amount_idr)}</td><td>${esc(u.tx_id)}</td><td class="muted">${new Date(u.found_at+'Z').toLocaleString('id-ID')}</td><td><button class="btn sec" data-res="${u.id}">Resolve</button></td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelectorAll('[data-res]').forEach(b => b.onclick = async () => { const qid = prompt('qris_id invoice yang dituju (kosongkan = buang):'); await admin('/unmatched/'+b.dataset.res+'/resolve', { method:'POST', body: JSON.stringify({ qris_id: qid || null }) }); render('unmatched'); });
+  })();
+}
+
+function renderLogs() {
+  (async () => {
+    const r = await admin('/logs');
+    content.innerHTML = `<div class="panel"><h3>Log Aktivitas</h3><table><thead><tr><th>Waktu</th><th>Level</th><th>User</th><th>Pesan</th></tr></thead><tbody>${(r.data||[]).map(l=>`<tr><td class="muted">${new Date(l.created_at+'Z').toLocaleString('id-ID')}</td><td>${tag(l.level)}</td><td>${esc(l.user_email||l.user_id||'-')}</td><td>${esc(l.message)}</td></tr>`).join('')}</tbody></table></div>`;
+  })();
+}
+
+const initial = location.hash.slice(1) || 'overview';
+render(initial);

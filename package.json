@@ -1,0 +1,22 @@
+{
+  "name": "qrispay",
+  "version": "1.0.0",
+  "description": "QRISPay - operator-pooled multi-provider QRIS payment gateway (GoPay + ShopeePay) with ledger & withdrawals (cPanel/MySQL ready)",
+  "main": "app.js",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "test": "node --test tests/**/*.test.js",
+    "migrate": "node scripts/migrate.js",
+    "create-admin": "node scripts/create-admin.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mysql2": "^3.12.0"
+  }
+}

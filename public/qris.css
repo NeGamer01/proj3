@@ -1,0 +1,14 @@
+:root { --bg:#0f172a; --panel:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --accent:#6366f1; --ok:#22c55e; --line:#334155; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); display: grid; place-items: center; min-height: 100vh; padding: 16px; }
+.qr-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 26px; text-align: center; max-width: 380px; width: 100%; }
+.qr-card h2 { margin: 0 0 4px; }
+.qr-card .amt { font-size: 28px; font-weight: 700; margin: 10px 0; }
+.qr-card .ref { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+.qr-card img { width: 280px; height: 280px; background: #fff; padding: 10px; border-radius: 10px; }
+.qr-card .status { margin-top: 14px; font-weight: 600; }
+.qr-card .status.paid { color: var(--ok); }
+.qr-card .status.expired { color: #ef4444; }
+.qr-card .countdown { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.qr-card .btn { display: inline-block; margin-top: 14px; background: var(--accent); color: #fff; padding: 9px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; }
+.qr-card .meta { color: var(--muted); font-size: 12px; margin-top: 12px; }

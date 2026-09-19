@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QRISPay — Bayar</title>
+<link rel="stylesheet" href="/qris.css">
+</head>
+<body>
+<div class="qr-card">
+  <h2>Scan & Bayar</h2>
+  <div id="amt" class="amt">…</div>
+  <div id="ref" class="ref"></div>
+  <img id="qrimg" alt="QRIS" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E">
+  <div id="status" class="status">⏳ Memuat…</div>
+  <div id="countdown" class="countdown"></div>
+  <a id="dl" class="btn" href="?download=1">Unduh QR</a>
+  <div id="meta" class="meta"></div>
+</div>
+<script src="/qris.js"></script>
+</body>
+</html>

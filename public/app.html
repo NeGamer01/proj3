@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QRISPay — Dashboard</title>
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h1>QRISPay</h1>
+    <nav>
+      <a href="#overview" class="nav" data-view="overview">Overview</a>
+      <a href="#balance" class="nav" data-view="balance">Saldo & Withdraw</a>
+      <a href="#qris" class="nav" data-view="qris">Invoice QRIS</a>
+      <a href="#keys" class="nav" data-view="keys">API Keys</a>
+      <a href="#subscription" class="nav" data-view="subscription">Langganan</a>
+      <a href="#webhooks" class="nav" data-view="webhooks">Webhooks</a>
+      <a href="/docs" target="_blank">Dokumentasi API</a>
+      <a href="#" id="logout">Logout</a>
+    </nav>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h2 id="view-title">Overview</h2>
+      <div class="user" id="whoami"></div>
+    </div>
+    <div id="content"></div>
+  </main>
+</div>
+<script src="/assets/common.js"></script>
+<script>
+const content = document.getElementById('content');
+const title = document.getElementById('view-title');
+const TITLES = { overview: 'Overview', balance: 'Saldo & Withdraw', qris: 'Invoice QRIS', keys: 'API Keys', subscription: 'Langganan', webhooks: 'Webhooks' };
+
+document.getElementById('logout').onclick = async (e) => { e.preventDefault(); await api('/app/api/auth/logout', { method: 'POST' }); location.href = '/'; };
+document.querySelectorAll('.nav').forEach(a => a.onclick = (e) => { e.preventDefault(); const v = a.dataset.view; location.hash = v; render(v); });
+
+async function render(view) {
+  title.textContent = TITLES[view] || view;
+  const ov = await loadOverview();
+  if (!ov) return;
+  document.getElementById('whoami').textContent = ov.user.email;
+  content.innerHTML = '';
+  if (view === 'overview') return renderOverview(ov);
+  if (view === 'balance') return renderBalance(ov);
+  if (view === 'qris') return renderQris(ov);
+  if (view === 'keys') return renderKeys(ov);
+  if (view === 'subscription') return renderSubscription(ov);
+  if (view === 'webhooks') return renderWebhooks(ov);
+}
+
+function renderOverview(d) {
+  const provs = d.providers.map(p => `<div class="card"><div class="lbl">${esc(p.name)}</div><div class="val" style="font-size:14px">${p.implemented ? 'Aktif' : 'Segera'}</div><div class="sub">${p.summary?.status || ''}</div></div>`).join('');
+  content.innerHTML = `
+    <div class="grid">
+      <div class="card"><div class="lbl">Saldo Tersedia</div><div class="val">${money(d.balance.available)}</div><div class="sub">Held: ${money(d.balance.held)}</div></div>
+      <div class="card"><div class="lbl">Paket</div><div class="val" style="font-size:14px">${esc(d.subscription.plan || 'Gratis (H+1)')}</div><div class="sub">${d.subscription.active ? 'Aktif' : 'Tidak aktif'}</div></div>
+      <div class="card"><div class="lbl">Invoice Lunas (30d)</div><div class="val">${d.stats.paid}</div><div class="sub">Volume ${money(d.stats.paid_volume)}</div></div>
+      <div class="card"><div class="lbl">API Keys</div><div class="val">${d.api_keys.length}</div><div class="sub">Max 5</div></div>
+    </div>
+    <div class="panel"><h3>Provider</h3><div class="grid">${provs}</div></div>
+    <div class="panel"><h3>Akses Provider</h3><p class="hint">Tier Anda mengizinkan: <b>${esc(d.allowed_providers.join(', '))}</b></p></div>
+  `;
+}
+
+function renderBalance(d) {
+  content.innerHTML = `
+    <div class="grid">
+      <div class="card"><div class="lbl">Saldo</div><div class="val">${money(d.balance.balance)}</div></div>
+      <div class="card"><div class="lbl">Ditahan (Held)</div><div class="val">${money(d.balance.held)}</div></div>
+      <div class="card"><div class="lbl">Tersedia</div><div class="val">${money(d.balance.available)}</div></div>
+    </div>
+    <div class="panel">
+      <h3>Ajukan Withdraw</h3>
+      <form id="wd" class="form">
+        <div class="row">
+          <label>Nominal<input name="amount" type="number" min="1000" required></label>
+          <label>Bank<input name="bank_name" placeholder="BCA / Mandiri / dll" required></label>
+        </div>
+        <div class="row">
+          <label>No. Rekening<input name="account_number" required></label>
+          <label>Atas Nama<input name="account_name" required></label>
+        </div>
+        <button class="btn" type="submit">Ajukan</button>
+      </form>
+      <p id="wd-msg" class="msg"></p>
+    </div>
+    <div class="panel"><h3>Riwayat Withdraw</h3><div id="wd-list"></div></div>
+    <div class="panel"><h3>Ledger (Audit Trail)</h3><div id="ldg-list"></div></div>
+  `;
+  document.getElementById('wd').addEventListener('submit', async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('wd-msg');
+    const r = await api('/app/api/withdraw', { method: 'POST', body: JSON.stringify({ amount: Number(f.amount), bank_detail: { method: 'bank', bank_name: f.bank_name, account_number: f.account_number, account_name: f.account_name } }) });
+    msg.textContent = r.success ? 'Diajukan. Menunggu proses admin.' : (r.message || 'Gagal'); msg.className = 'msg ' + (r.success ? 'ok' : 'err');
+    if (r.success) render('balance');
+  });
+  (async () => {
+    const [wd, lg] = await Promise.all([api('/app/api/withdrawals'), api('/app/api/ledger')]);
+    document.getElementById('wd-list').innerHTML = (wd.data || []).map(w => `<table><tr><td>${esc(w.id)}</td><td>${money(w.amount)}</td><td>${tag(w.status)}</td><td class="muted">${new Date(w.created_at).toLocaleString('id-ID')}</td>${w.status === 'requested' ? `<td><button class="btn sec" data-cancel="${esc(w.id)}">Batal</button></td>` : ''}</tr></table>`).join('') || '<p class="muted">Belum ada</p>';
+    document.getElementById('ldg-list').innerHTML = `<table><thead><tr><th>Waktu</th><th>Tipe</th><th>Nominal</th><th>Saldo setelah</th></tr></thead><tbody>${(lg.data || []).map(e => `<tr><td class="muted">${new Date(e.created_at).toLocaleString('id-ID')}</td><td>${esc(e.type)}</td><td>${money(e.amount)}</td><td>${money(e.balance_after)}</td></tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => { await api('/app/api/withdrawals/' + b.dataset.cancel + '/cancel', { method: 'POST' }); render('balance'); });
+  })();
+}
+
+function renderQris(d) {
+  content.innerHTML = `
+    <div class="panel">
+      <h3>Buat Invoice Tes</h3>
+      <form id="qi" class="form">
+        <div class="row">
+          <label>Nominal (base)<input name="amount" type="number" min="1000" required></label>
+          <label>Provider<select name="provider">${d.allowed_providers.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}</select></label>
+          <label>Reference<input name="reference" placeholder="TEST"></label>
+        </div>
+        <button class="btn" type="submit">Buat QRIS</button>
+      </form>
+      <p id="qi-msg" class="msg"></p>
+    </div>
+    <div class="panel"><h3>Invoice Terbaru</h3><div id="qi-list"></div></div>
+  `;
+  document.getElementById('qi').addEventListener('submit', async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('qi-msg');
+    const r = await api('/app/api/qris', { method: 'POST', body: JSON.stringify({ amount: Number(f.amount), provider: f.provider, reference: f.reference }) });
+    msg.textContent = r.success ? `QRIS dibuat: ${r.data.qris_id}` : (r.message || 'Gagal'); msg.className = 'msg ' + (r.success ? 'ok' : 'err');
+    if (r.success) window.open(`/qr/${r.data.qris_id}?amt=${r.data.amount}`, '_blank');
+    loadQrisList();
+  });
+  async function loadQrisList() {
+    const r = await api('/app/api/qris');
+    document.getElementById('qi-list').innerHTML = `<table><thead><tr><th>ID</th><th>Provider</th><th>Total</th><th>Status</th><th>Waktu</th></tr></thead><tbody>${(r.data || []).map(i => `<tr><td><a href="/qr/${esc(i.qris_id)}" target="_blank">${esc(i.qris_id)}</a></td><td>${esc(i.provider)}</td><td>${money(i.amount)}</td><td>${tag(i.status)}</td><td class="muted">${new Date(i.created_at).toLocaleString('id-ID')}</td></tr>`).join('')}</tbody></table>`;
+  }
+  loadQrisList();
+}
+
+function renderKeys(d) {
+  content.innerHTML = `
+    <div class="panel">
+      <h3>Buat API Key</h3>
+      <form id="kf" class="form"><div class="row"><label>Label (opsional)<input name="label"></label><button class="btn" type="submit">Buat</button></div></form>
+      <p id="kf-msg" class="msg"></p>
+    </div>
+    <div class="panel"><h3>API Keys</h3><div id="kf-list"></div></div>
+  `;
+  document.getElementById('kf').addEventListener('submit', async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('kf-msg');
+    const r = await api('/app/api/keys', { method: 'POST', body: JSON.stringify(f) });
+    if (r.success) { msg.innerHTML = `Key (simpan!): <code>${esc(r.data.key)}</code>`; msg.className = 'msg ok'; loadKeys(); } else { msg.textContent = r.message || 'Gagal'; msg.className = 'msg err'; }
+  });
+  async function loadKeys() {
+    const r = await api('/app/api/keys');
+    document.getElementById('kf-list').innerHTML = `<table><thead><tr><th>Prefix</th><th>Label</th><th>Status</th><th>Dibuat</th><th></th></tr></thead><tbody>${(r.data || []).map(k => `<tr><td><code>${esc(k.key_prefix)}</code></td><td>${esc(k.label || '')}</td><td>${tag(k.active ? 'active' : 'blocked')}</td><td class="muted">${new Date(k.created_at).toLocaleString('id-ID')}</td><td><button class="btn danger" data-rev="${k.id}">Cabut</button></td></tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('[data-rev]').forEach(b => b.onclick = async () => { await api('/app/api/keys/' + b.dataset.rev, { method: 'DELETE' }); loadKeys(); });
+  }
+  loadKeys();
+}
+
+function renderSubscription(d) {
+  (async () => {
+    const [plans, sub] = await Promise.all([api('/app/api/plans'), api('/app/api/subscription')]);
+    content.innerHTML = `
+      <div class="panel"><h3>Status Langganan</h3><p>Paket: <b>${esc(sub.data.status.plan || 'Gratis (H+1)')}</b> ${tag(sub.data.status.active ? 'active' : 'EXPIRED')}<br>Sampai: ${sub.data.status.ends_at ? new Date(sub.data.status.ends_at + 'Z').toLocaleString('id-ID') : '-'}<br>Provider: ${esc(sub.data.status.providers.join(', '))}</p></div>
+      <div class="panel"><h3>Pilih Paket</h3><table><thead><tr><th>Paket</th><th>Tier</th><th>Provider</th><th>Harga</th><th>Durasi</th><th></th></tr></thead><tbody>${(plans.data || []).map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.tier)}</td><td>${esc(p.providers.join(', '))}</td><td>${money(p.price)}</td><td>${p.duration_days} hari</td><td>${p.price > 0 ? `<button class="btn" data-plan="${p.id}">Beli</button>` : '<span class="muted">Gratis</span>'}</td></tr>`).join('')}</tbody></table></div>
+      <div class="panel"><h3>Riwayat</h3><table><thead><tr><th>Order</th><th>Paket</th><th>Nominal</th><th>Status</th></tr></thead><tbody>${(sub.data.orders || []).map(o => `<tr><td>${esc(o.id)}</td><td>${esc(o.plan_name)}</td><td>${money(o.amount)}</td><td>${tag(o.status)}</td></tr>`).join('')}</tbody></table></div>
+    `;
+    document.querySelectorAll('[data-plan]').forEach(b => b.onclick = async () => {
+      const r = await api('/app/api/subscription/orders', { method: 'POST', body: JSON.stringify({ plan_id: Number(b.dataset.plan) }) });
+      if (r.success && r.data.qris_id) window.open(`/qr/${r.data.qris_id}?amt=${r.data.amount}`, '_blank');
+    });
+  })();
+}
+
+function renderWebhooks(d) {
+  content.innerHTML = `
+    <div class="panel">
+      <h3>Daftarkan Webhook</h3>
+      <form id="wh" class="form">
+        <label>URL<input name="url" placeholder="https://yourbot/webhook" required></label>
+        <label>Secret (opsional)<input name="secret" placeholder="HMAC secret"></label>
+        <button class="btn" type="submit">Daftarkan</button>
+      </form>
+      <p id="wh-msg" class="msg"></p>
+    </div>
+    <div class="panel"><h3>Webhooks</h3><div id="wh-list"></div></div>
+  `;
+  document.getElementById('wh').addEventListener('submit', async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('wh-msg');
+    const r = await api('/app/api/webhooks', { method: 'POST', body: JSON.stringify(f) });
+    msg.textContent = r.success ? 'Terdaftar' : (r.message || 'Gagal'); msg.className = 'msg ' + (r.success ? 'ok' : 'err');
+    if (r.success) loadWh();
+  });
+  async function loadWh() {
+    const r = await api('/app/api/webhooks');
+    document.getElementById('wh-list').innerHTML = `<table><thead><tr><th>URL</th><th>Events</th><th></th></tr></thead><tbody>${(r.data || []).map(w => `<tr><td>${esc(w.url)}</td><td>${esc(w.events.join(', '))}</td><td><button class="btn danger" data-del="${esc(w.id)}">Hapus</button></td></tr>`).join('')}</tbody></table>`;
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { await api('/app/api/webhooks/' + b.dataset.del, { method: 'DELETE' }); loadWh(); });
+  }
+  loadWh();
+}
+
+const initial = location.hash.slice(1) || 'overview';
+render(initial);

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QRISPay — Login</title>
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<main class="auth-wrap">
+  <div class="auth-card">
+    <h1>QRISPay</h1>
+    <p class="muted">Payment Gateway QRIS Multi-Provider</p>
+    <div id="mode-register" hidden>
+      <h2>Daftar</h2>
+      <form id="form-register" class="form">
+        <label>Nama<input name="name" required></label>
+        <label>Email<input name="email" type="email" required></label>
+        <label>Password <small>(min 8 karakter)</small><input name="password" type="password" required minlength="8"></label>
+        <button class="btn" type="submit">Daftar</button>
+      </form>
+      <p class="switch">Sudah punya akun? <a href="#" id="to-login">Login</a></p>
+    </div>
+    <div id="mode-login">
+      <h2>Login</h2>
+      <form id="form-login" class="form">
+        <label>Email<input name="email" type="email" required></label>
+        <label>Password<input name="password" type="password" required></label>
+        <button class="btn" type="submit">Login</button>
+      </form>
+      <p class="switch">Belum punya akun? <a href="#" id="to-register">Daftar</a></p>
+    </div>
+    <p id="msg" class="msg"></p>
+  </div>
+</main>
+<script>
+const api = (p, o) => fetch('/app/api/auth/' + p, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(o) }).then(r => r.json());
+const msg = document.getElementById('msg');
+function show(m, ok){ msg.textContent = m; msg.className = 'msg ' + (ok ? 'ok' : 'err'); }
+document.getElementById('form-login').addEventListener('submit', async e => {
+  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const r = await api('login', f);
+  if (r.success) location.href = '/'; else show(r.message || 'Gagal login', false);
+});
+document.getElementById('form-register').addEventListener('submit', async e => {
+  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const r = await api('register', f);
+  if (r.success) location.href = '/'; else show(r.message || 'Gagal daftar', false);
+});
+document.getElementById('to-register').onclick = (e) => { e.preventDefault(); document.getElementById('mode-login').hidden = true; document.getElementById('mode-register').hidden = false; show(''); };
+document.getElementById('to-login').onclick = (e) => { e.preventDefault(); document.getElementById('mode-register').hidden = true; document.getElementById('mode-login').hidden = false; show(''); };
+if (location.pathname.endsWith('/register')) document.getElementById('to-register').click();
+</script>
+</body>
+</html>
