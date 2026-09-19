@@ -9,7 +9,8 @@ const URLS = {
   requestOtp: 'https://api.gobiz.co.id/goid/login/request',
   token: 'https://api.gobiz.co.id/goid/token',
   userConfig: 'https://api.gobiz.co.id/goresto/v5/public/users/config',
-  transactions: 'https://api.gojekapi.com/merchant-analytics/v2/merchants/transactions'
+  // Overridable for testing (points fetchTransactions at a mock server).
+  transactions: process.env.GOBIZ_TX_URL || 'https://api.gojekapi.com/merchant-analytics/v2/merchants/transactions',
 };
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';

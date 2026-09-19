@@ -430,6 +430,7 @@ npm start                            # expect "[Startup] DB ready" + admin creat
 
 > Audit read-only seluruh codebase dilakukan sebelum verifikasi runtime. Dua bug ditemukan
 > dan **sudah diperbaiki**. Catat di sini agar tidak kambuh / untuk referensi debugging.
+> **Verifikasi runtime (§9.1) lalu menemukan 3 bug tambahan, juga sudah diperbaiki.**
 
 ### Bug 1 — `src/services/invoices.js` INSERT placeholder mismatch (FIXED)
 - **Gejala**: setiap pembuatan invoice (API, test, langganan) akan throw — MySQL reject.
@@ -457,6 +458,96 @@ npm start                            # expect "[Startup] DB ready" + admin creat
   `balance/held/available`; `allowedProviders` free=shopeepay/admin=both; `resolve` return
   `subscription_active`.
 - `app.js` routing cocok dengan `app.html`/`admin.html`/`qris.html`/`docs.html`.
+
+### 9.1 Bug ditemukan saat verifikasi runtime (FIXED)
+
+Verifikasi runtime penuh dijalankan (install → unit test → migrate → boot → integration test
+end-to-end dengan mock GoBiz server). **3 bug baru ditemukan & diperbaiki:**
+
+#### Bug 3 — `src/db.js` seed plans placeholder mismatch (FIXED, menggagalkan migrate)
+- **Gejala**: `npm run migrate` (atau boot pertama kali) **selalu gagal** dengan
+  `Column count doesn't match value count at row 1`. **Setiap fresh install gagal** — bug paling
+  kritis dari semua: aplikasi tidak bisa dipasang baru sama sekali.
+- **Sebab**: `INSERT INTO plans (code, name, duration_days, price, tier, providers, active,
+  sort_order) VALUES (?,?,?,?,?,?,?,1,?)` — 8 kolom, tapi VALUES punya **9 elemen**
+  (8 placeholder + literal `1`), dan params array hanya 7 elemen. Posisi literal `1` juga salah
+  (di kolom `providers`, bukan `active`).
+- **Fix**: `VALUES (?,?,?,?,?,?,1,?)` — literal `1` di posisi `active` (kolom ke-7), 8 placeholder,
+  7 params.
+- **Status**: ✅ fixed.
+
+#### Bug 4 — grant langganan admin tidak teruskan `plan_id` → provider list kosong (FIXED)
+- **Gejala**: admin beri langganan manual via dashboard → user jadi "aktif" tetapi
+  `allowed_providers` **kosong** (`[]`). Akibatnya user langganan **tidak bisa buat QRIS dengan
+  provider manapun** — selalu `403 PROVIDER_NOT_PERMITTED`. Bug diam-diam: status langganan
+  terlihat aktif, tapi provider gating memblok semua.
+- **Sebab**: `routes/admin.js POST /users/:id/subscription` **tidak meneruskan `plan_id`** ke
+  `subs.grant()`; UI `admin.html` juga tidak punya field untuk memilih paket. Padahal
+  `allowedProviders` membaca `plan.providers` dari join `subscriptions → plans`. Tanpa plan_id,
+  `plan_id` NULL → `providers` NULL → `parseProviders(null)` = `[]`.
+- **Fix**: route teruskan `plan_id` (optional, default null); `admin.html` form "Beri Langganan
+  Manual" sekarang punya **dropdown paket** (diisi dinamis dari `GET /admin/api/plans`) dan
+  mengirim `plan_id`.
+- **Catatan**: `POST /users/:id/subscription` tanpa `plan_id` masih legal (kompatibel), hanya
+  saja providers = free-tier default.
+- **Status**: ✅ fixed (backend + UI).
+
+#### Bug 5 — `npm test` glob tidak rekursif (FIXED)
+- **Gejala**: `npm test` hanya menjalankan 1 dari 2 file test (`tests/matching.test.js` tidak
+  pernah dijalankan). Silent failure — test terlihat hijau tapi cakupannya separuh.
+- **Sebab**: `scripts.test` = `node --test tests/**/*.test.js`. Bash dengan `globstar` **off**
+  (default) memperluas `**` seperti `*` → hanya `tests/gopay/normalize.test.js` yang cocok;
+  `tests/matching.test.js` di root `tests/` tidak terambil.
+- **Fix**: quote glob: `node --test "tests/**/*.test.js"` — Node's `--test` melakukan glob-nya
+  sendiri secara rekursif saat di-quote.
+- **Status**: ✅ fixed; `npm test` sekarang menjalankan **11 test** (normalize 7 + matching 4).
+
+#### Hasil verifikasi runtime (lengkap, §8 + §16)
+- `node --version` v24, deps 5/5 terinstall (express, mysql2, axios, cookie-parser, dotenv).
+- **Syntax check 40 file JS**: 0 error (parse-only via `new Function`).
+- **Config validation**: reject ketika `SESSION_SECRET` <32 / `PROVIDER_MASTER_KEY` bukan 64-hex;
+  accept saat valid. `scripts/gen-secrets.js` output benar.
+- **MariaDB 10.x** (pengganti MySQL di environment test): `npm run migrate` → **14 tabel** InnoDB
+  terbuat + seed plans (`free` H1 shopeepay, `h0-monthly` H0 gopay+shopeepay) + 2 baris
+  `provider_accounts` (status `unconfigured`).
+- **Boot**: `[Startup] DB ready` + admin dari env dibuat + poller gopay & shopeepay start +
+  `QRISPay running on port 3111`. `GET /api/v1/healthz` → `{"status":"healthy"}`.
+- **`npm test`**: 11/11 pass (normalize sen→rupiah 7, QRIS injection/CRC 4).
+- **`npm run test:integration`** (script baru `scripts/integration-test.js`, §16): **28/28 pass** —
+  spawn app instance + mock GoBiz server, lalu lewati seluruh pipeline asli:
+  admin login → set static QRIS → provider session aktif → register user (201) → tier gate
+  `SUBSCRIPTION_REQUIRED` → grant plan H0 → API key `qp_` → `POST /api/v1/qris` 201 →
+  **QRIS dinamis valid** (tag 01→12, tag 54=total, CRC) → **matching amount eksak → PAID** →
+  **ledger kredit base_amount** → **idempotensi claim (provider,tx_id)** → alokasi kode unik
+  berbeda untuk base sama → **orphan → unmatched_payments** (no auto-credit) → withdraw hold →
+  `INSUFFICIENT_BALANCE` → admin process → balance 6000/held 0 → audit trail
+  credit+debit_hold+debit_settled.
+- **Environment**: Termux/Android (Node 24, MariaDB port 3306, socket `$PREFIX/var/run/mysqld/`).
+  Aplikasi sendiri cPanel-ready (tidak ada perubahan untuk environment ini; `.env` test dipakai
+  hanya untuk verifikasi).
+
+#### Tambahan setelah fresh-install test (dari database benar-benar kosong)
+- **Auto-create database** ditambahkan ke `db.migrate()`: `CREATE DATABASE IF NOT EXISTS` lewat
+  koneksi throwaway **tanpa default database** (pool utama tidak bisa connect saat DB default
+  belum ada — `ER_BAD_DB_ERROR` di handshake). Gagal (mis. di cPanel user tak punya hak CREATE)
+  hanya di-warning, lalu `CREATE TABLE` yang menampilkan error sebenarnya. Sekarang
+  `DB_NAME=qrispay_baru npm run migrate` langsung bekerja dari nol.
+- **Fresh-install verified**: database baru → 15 tabel + seed plans + 2 provider_accounts →
+  `npm run test:integration` **28/28 pass** tanpa data residual.
+- `.env.example` disarankan tetap menyebut bahwa di cPanel DB dibuat manual dulu (ALL PRIVILEGES),
+  auto-create hanya kenyamanan lokal/dev.
+- **Tutorial deploy** ditulis di `docs/TUTORIAL-DEPLOY.md` (10 langkah: upload → MySQL →
+  `.env` via `gen-secrets.js` → migrate → Setup Node.js App → healthz → admin → provider →
+  log/troubleshooting table). Semua path/perintah di tutorial sudah diverifikasi terhadap repo.
+
+#### Production-readiness (verifikasi kode app)
+- `app.set('trust proxy', true)` + `disable('x-powered-by')` — benar untuk HTTPS lewat
+  proxy cPanel/Cloudflare.
+- Graceful shutdown `SIGTERM`/`SIGINT`: poller stop → server close → db close → exit.
+  Passenger restart tidak menyebabkan koneksi menggantung.
+- Semua background job `setInterval(...).unref()` (expire invoice, clean claims, prune logs,
+  refresh token 6 jam, poller) — tidak menahan proses.
+- 0 native module di dependency tree → shared-hosting safe; tidak ada build step.
 
 ---
 
@@ -555,21 +646,43 @@ Semua `setInterval(...).unref()` — tidak keep process hidup; `app.listen` yang
 
 ## 15. Scripts (`scripts/`)
 
-- `gen-secrets.js` — generate `SESSION_SECRET` (48 hex) + `PROVIDER_MASTER_KEY` (64 hex),
-  print ke .env.
+- `gen-secrets.js` — generate `SESSION_SECRET` (48 hex) + `PROVIDER_MASTER_KEY` (64 hex) +
+  `ADMIN_PASSWORD`, print ke .env.
 - `migrate.js` — jalankan `db.migrate()` standalone.
-- `create-admin.js` — buat admin dari env standalone.
+- `create-admin.js` — buat admin dari env standalone (butuh argumen email+password).
+- `integration-test.js` — integration test runtime penuh (lihat §16), jalankan dengan
+  `npm run test:integration`.
 
 ---
 
-## 16. Tests (`tests/`)
+## 16. Tests (`tests/` + `scripts/integration-test.js`)
 
-- `gopay/normalize.test.js` — sen→rupiah: `gross_amount`, `real_gross_amount`, `amount.value`,
-  malformed skip, completed status (SETTLEMENT/CAPTURE/empty).
-- `matching.test.js` — pure QRIS injection: `calculateCRC16` stable, `generateDynamicQRIS`
-  flips tag 01→12 + inject tag 54 + CRC valid, rejects invalid, `parseEMVCoTags` strips CRC.
+### Unit tests (pure, offline) — `npm test`
+- `tests/gopay/normalize.test.js` — sen→rupiah: `gross_amount`, `real_gross_amount`,
+  `amount.value`, malformed skip, completed status (SETTLEMENT/CAPTURE/empty).
+- `tests/matching.test.js` — pure QRIS injection: `calculateCRC16` stable,
+  `generateDynamicQRIS` flips tag 01→12 + inject tag 54 + CRC valid, rejects invalid,
+  `parseEMVCoTags` strips CRC.
 
-Jalankan: `npm test` (pakai `node --test`).
+Jalankan: `npm test` (pakai `node --test`, glob di-quote agar rekursif — lihat §9.1 Bug 5).
+**11/11 pass.**
+
+### Integration test (butuh MySQL) — `npm run test:integration`
+`scripts/integration-test.js` — verifikasi runtime penuh. Men-spawn instance aplikasi
+sendiri di port `INTEST_APP_PORT` (default 3222) + mock server GoBiz di
+`INTEST_MOCK_PORT` (default 3333). Transaksi URL GoPay di-redirect via env
+`GOBIZ_TX_URL` (hook testability di `providers/gopay/client.js`), jadi **tidak ada trafik
+GoBiz asli**. Kemudian lewatati seluruh pipeline via HTTP biasa:
+
+auth admin → set QRIS statis → inject session → register → tier gate → grant plan H0 →
+API key → buat invoice → **QRIS dinamis tervalidasi (tag 01→12, 54, CRC)** → inject mutasi
+mock (minor unit) → **matching amount eksak → PAID** → **ledger kredit base_amount** →
+**idempotensi claim** (re-inject tx sama, balance tidak berubah, 1 baris claim) → alokasi
+kode unik berbeda untuk base sama → **orphan → unmatched_payments** → withdraw hold →
+`INSUFFICIENT_BALANCE` untuk over-withdraw → admin process → balance turun, held 0 →
+ledger audit trail.
+
+**28/28 pass.** Lihat §9.1 untuk ringkasan bug yang ditemukan oleh test ini.
 
 ---
 
@@ -597,8 +710,16 @@ Jalankan: `npm test` (pakai `node --test`).
 - ✅ **Fase 1 lengkap secara kode**: semua service, provider GoPay, routes, middleware,
   poller, db, utils, scripts, tests, halaman publik (termasuk `app.html` + `admin.html`).
 - ✅ **Audit read-only seluruh codebase** selesai; 2 bug ditemukan & diperbaiki (§9).
-- ⏳ **Verifikasi runtime** (`npm install && npm test && npm start`) TERTUNDA — classifier
-  Bash sedang unavailable sesi ini. Jalankan manual (§8).
+- ✅ **Verifikasi runtime SELESAI** (§9.1): install deps → `npm test` 11/11 → migrate 14 tabel →
+  boot server (healthz OK, poller start) → `npm run test:integration` **28/28 pass**.
+  **3 bug tambahan ditemukan & diperbaiki** selama verifikasi:
+  - **Bug 3** (kritis!): seed `plans` placeholder mismatch → **setiap fresh install gagal**.
+  - **Bug 4** (silent): grant langganan admin tidak teruskan `plan_id` → `allowed_providers`
+    kosong → user langganan tidak bisa QRIS sama sekali.
+  - **Bug 5**: `npm test` glob tidak rekursif → `matching.test.js` never ran.
+  Tambahan: `.gitignore` dibuat (`.env`, `*.key`, `*.har`, `logs/`, `node_modules/`),
+  hook testability `GOBIZ_TX_URL` di `providers/gopay/client.js`, script integration test
+  permanen, UI admin dapat dropdown paket saat grant langganan.
 - 🔜 **Fase 2** ShopeePay — port dari `QrisMerchantID` (B1 manual token dulu, B2 OTP kedua).
 
 ---

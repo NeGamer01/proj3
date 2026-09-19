@@ -252,6 +252,22 @@ const DEFAULT_PLANS = [
 ];
 
 async function migrate() {
+  // Ensure the database itself exists (idempotent). The main pool cannot connect when its default
+  // database is missing (ER_BAD_DB_ERROR at handshake), so create it through a throwaway connection
+  // that has NO default database. On shared hosting (cPanel) the DB is pre-created and the user may
+  // lack CREATE privileges — the IF NOT EXISTS + ignore keeps migrate usable there too.
+  try {
+    const adminPool = mysql.createPool({
+      host: config.db.host, port: config.db.port, user: config.db.user,
+      password: config.db.password, socketPath: config.db.socketPath,
+      waitForConnections: true, connectionLimit: 1, charset: 'utf8mb4', timezone: 'Z', dateStrings: true
+    });
+    await adminPool.query(`CREATE DATABASE IF NOT EXISTS \`${config.db.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    await adminPool.end();
+  } catch (e) {
+    logger.warn(`[DB] CREATE DATABASE skipped: ${e.message}`);
+  }
+
   for (const stmt of SCHEMA) await query(stmt);
 
   // Seed default plans (active=1)
@@ -259,7 +275,7 @@ async function migrate() {
   if (Number(plans[0].c) === 0) {
     for (const p of DEFAULT_PLANS) {
       await query(
-        'INSERT INTO plans (code, name, duration_days, price, tier, providers, active, sort_order) VALUES (?,?,?,?,?,?,?,1,?)',
+        'INSERT INTO plans (code, name, duration_days, price, tier, providers, active, sort_order) VALUES (?,?,?,?,?,?,1,?)',
         [p.code, p.name, p.duration_days, p.price, p.tier, JSON.stringify(p.providers), p.sort_order]
       );
     }

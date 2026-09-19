@@ -76,7 +76,8 @@ router.post('/users/:id/status', wrap(async (req, res) => {
 router.post('/users/:id/subscription', wrap(async (req, res) => {
   const id = pid(req.params.id); const days = Number(req.body?.days);
   if (!(days > 0 && days <= 3650)) return res.status(400).json({ success: false, message: 'days harus 1–3650' });
-  const r = await subs.grant(id, { days, source: 'manual', note: req.body?.note ? String(req.body.note).slice(0, 255) : `oleh admin ${req.user.email}` });
+  const planId = req.body?.plan_id != null && req.body?.plan_id !== '' ? pid(req.body.plan_id) : null;
+  const r = await subs.grant(id, { planId, days, source: 'manual', note: req.body?.note ? String(req.body.note).slice(0, 255) : `oleh admin ${req.user.email}` });
   res.json({ success: true, data: r });
 }));
 

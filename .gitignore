@@ -1,0 +1,8 @@
+# Secrets & runtime state — never commit
+.env
+*.key
+qrispay.key
+*.har
+logs/
+node_modules/
+package-lock.json
