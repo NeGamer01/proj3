@@ -4,13 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QRISPay — Admin</title>
-<link rel="stylesheet" href="/assets/app.css?v=2">
+<link rel="stylesheet" href="/assets/app.css?v=4">
 </head>
 <body>
 <div class="layout">
   <aside class="sidebar">
-    <h1>QRISPay</h1>
-    <div class="badge">ADMIN</div>
+    <div class="brand">
+      <span class="logo">Q</span>
+      <h1>QRISPay</h1>
+    </div>
+    <p class="brand-sub">Payment Gateway</p>
+    <div class="badge">Admin Panel</div>
     <nav>
       <a href="#overview" class="nav" data-view="overview">Overview</a>
       <a href="#users" class="nav" data-view="users">Pengguna</a>
@@ -34,7 +38,7 @@
     <div id="content"></div>
   </main>
 </div>
-<script src="/assets/common.js?v=3"></script>
+<script src="/assets/common.js?v=4"></script>
 <script>
 // Global error trap: tampilkan error JS langsung di layar supaya bisa dilihat user
 window.addEventListener('error', (e) => {
