@@ -34,8 +34,13 @@
     <div id="content"></div>
   </main>
 </div>
-<script src="/assets/common.js?v=2"></script>
+<script src="/assets/common.js?v=3"></script>
 <script>
+// Global error trap: tampilkan error JS langsung di layar supaya bisa dilihat user
+window.addEventListener('error', (e) => {
+  const c = document.getElementById('content');
+  if (c) c.innerHTML = `<div class="panel"><h3>Terjadi Error</h3><p class="msg err">${esc(e.message)}</p><p class="hint">File: ${esc(e.filename)}:${e.lineno}:${e.colno}</p><button class="btn sec" onclick="location.reload()">Muat ulang</button></div>`;
+});
 const content = document.getElementById('content');
 const title = document.getElementById('view-title');
 const TITLES = { overview:'Overview', users:'Pengguna', plans:'Paket Langganan', providers:'Provider & OTP', orders:'Order', qris:'Invoice', withdrawals:'Withdraw', unmatched:'Unmatched', logs:'Logs' };
@@ -238,3 +243,4 @@ function renderLogs() {
 
 const initial = location.hash.slice(1) || 'overview';
 render(initial);
+</script>
