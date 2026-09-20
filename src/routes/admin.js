@@ -115,13 +115,19 @@ router.put('/providers/:name/static-qris', wrap(async (req, res) => {
   res.json({ success: true, data: { qris_configured: Boolean(qrisStatic) } });
 }));
 
+// pending OTP handshakes: provider name -> { phone, otpToken, deviceId, expiresAt }
+// OTP request & verify happen on separate requests; we hold the GoBiz otp_token/deviceId
+// in-memory so the admin only ever types the SMS code (like nikipayv2's wizard).
+const pendingOtps = new Map();
+
 router.post('/providers/:name/otp', wrap(async (req, res) => {
   const name = strid(req.params.name);
   if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
   const prov = providers.getProvider(name);
   try {
     const r = await prov.requestOtp(req.body?.phone);
-    res.json({ success: true, data: r });
+    pendingOtps.set(name, { phone: r.phone, otpToken: r.otpToken, deviceId: r.deviceId, expiresAt: Date.now() + r.expiresIn * 1000 });
+    res.json({ success: true, data: { phone: r.phone, expiresIn: r.expiresIn } });
   } catch (e) { res.status(e.status || 502).json({ success: false, code: e.code, message: e.message }); }
 }));
 
@@ -129,8 +135,14 @@ router.post('/providers/:name/verify', wrap(async (req, res) => {
   const name = strid(req.params.name);
   if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
   const prov = providers.getProvider(name);
+  const pending = pendingOtps.get(name);
+  if (!pending || Date.now() > pending.expiresAt) {
+    pendingOtps.delete(name);
+    return res.status(400).json({ success: false, code: 'OTP_NOT_REQUESTED', message: 'Minta OTP dulu sebelum verifikasi (sesi OTP sudah habis).' });
+  }
   try {
-    const session = await prov.verifyOtp({ phone: req.body?.phone, otpToken: req.body?.otp_token, otp: req.body?.otp, deviceId: req.body?.device_id });
+    const session = await prov.verifyOtp({ phone: pending.phone, otpToken: pending.otpToken, otp: req.body?.otp, deviceId: pending.deviceId });
+    pendingOtps.delete(name);
     logActivity(req.user.id, 'SUCCESS', `Provider ${name} login OK (${session.outlet_name || session.phone_number || ''})`);
     res.json({ success: true, data: await prov.summary() });
   } catch (e) { res.status(e.status || 502).json({ success: false, code: e.code, message: e.message }); }

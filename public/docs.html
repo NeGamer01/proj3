@@ -2,14 +2,22 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#060a18">
 <title>QRISPay — Dokumentasi API</title>
-<link rel="stylesheet" href="/assets/app.css?v=4">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/logo.svg">
+<link rel="stylesheet" href="/assets/app.css?v=7">
 </head>
 <body>
-<div class="main" style="max-width:900px;margin:0 auto;padding:22px;">
-  <h1>Dokumentasi API QRISPay</h1>
-  <p class="muted">Integrasi untuk bot / website. Autentikasi via header <code>x-api-key</code>.</p>
+<div class="docs-wrap">
+  <div class="doc-head">
+    <img class="logo" src="/assets/logo.svg" alt="QRISPay">
+    <div>
+      <h1 style="margin:0">Dokumentasi API QRISPay</h1>
+      <p class="muted" style="margin:2px 0 0">Integrasi untuk bot / website. Autentikasi via header <code>x-api-key</code>.</p>
+    </div>
+  </div>
 
   <div class="panel">
     <h3>Base URL</h3>
@@ -20,7 +28,7 @@
     <h3>Buat QRIS</h3>
     <p><code>POST /api/v1/qris</code> — <span class="muted">x-api-key</span></p>
     <pre><code>POST /api/v1/qris
-x-api-key: qp_xxx
+x-api-key: ***
 Content-Type: application/json
 
 { "amount": 10000, "provider": "gopay", "reference": "INV-1", "callback_url": "https://yourbot/webhook" }
@@ -71,7 +79,7 @@ crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(req.headers['x-webhook-sign
     <h3>Tier & Provider</h3>
     <ul>
       <li><b>H+1 (ShopeePay)</b> — gratis, untuk semua user. Settlement H+1.</li>
-      <li><b>H+0 (GoPay)</b> — khusus langganan berbayar. Settlement H+0 (lebih cepat cair).</li>
+      <li><b>H0 (GoPay)</b> — khusus langganan berbayar. Settlement H+0 (lebih cepat cair).</li>
     </ul>
     <p class="hint">Provider lain selain yang diizinkan tier → <code>403 PROVIDER_NOT_PERMITTED</code>.</p>
   </div>

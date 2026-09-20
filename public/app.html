@@ -2,38 +2,45 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#060a18">
 <title>QRISPay — Dashboard</title>
-<link rel="stylesheet" href="/assets/app.css?v=4">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/logo.svg">
+<link rel="stylesheet" href="/assets/app.css?v=7">
 </head>
 <body>
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">
-      <span class="logo">Q</span>
-      <h1>QRISPay</h1>
+      <img class="logo" src="/assets/logo.svg" alt="QRISPay">
+      <div><h1>QRISPay</h1><p class="brand-sub">Payment Gateway</p></div>
     </div>
-    <p class="brand-sub">Payment Gateway</p>
     <nav>
-      <a href="#overview" class="nav" data-view="overview">Overview</a>
-      <a href="#balance" class="nav" data-view="balance">Saldo & Withdraw</a>
-      <a href="#qris" class="nav" data-view="qris">Invoice QRIS</a>
-      <a href="#keys" class="nav" data-view="keys">API Keys</a>
-      <a href="#subscription" class="nav" data-view="subscription">Langganan</a>
-      <a href="#webhooks" class="nav" data-view="webhooks">Webhooks</a>
-      <a href="/docs" target="_blank">Dokumentasi API</a>
-      <a href="#" id="logout">Logout</a>
+      <div class="nav-group-label">Menu</div>
+      <a href="#overview" class="nav" data-view="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</a>
+      <a href="#balance" class="nav" data-view="balance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h19"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg>Saldo & Withdraw</a>
+      <a href="#qris" class="nav" data-view="qris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M14 3h3a1 1 0 0 1 1 1v3M3 14v-3a1 1 0 0 1 1-1h3"/></svg>Invoice QRIS</a>
+      <a href="#keys" class="nav" data-view="keys"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M17 4l3 3M14 7l3 3"/></svg>API Keys</a>
+      <a href="#subscription" class="nav" data-view="subscription"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h6"/></svg>Langganan</a>
+      <a href="#webhooks" class="nav" data-view="webhooks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 16a4 4 0 0 1 0-8 5.5 5.5 0 0 1 10.5-1.5A4.5 4.5 0 0 1 17 15.5"/><path d="M12 12v9M9 21h6"/></svg>Webhooks</a>
+      <div class="nav-group-label">Bantuan</div>
+      <a href="/docs" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v18H6.5A2.5 2.5 0 0 1 4 18.5z"/><path d="M8 8h7M8 12h7"/></svg>Docs</a>
+      <a href="#" id="logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg>Keluar</a>
     </nav>
   </aside>
   <main class="main">
-    <div class="topbar">
-      <h2 id="view-title">Overview</h2>
-      <div class="user" id="whoami"></div>
+    <div class="main-inner">
+      <div class="topbar">
+        <img class="topbar-logo" src="/assets/logo.svg" alt="">
+        <h2 id="view-title">Overview</h2>
+        <div class="user" id="whoami"></div>
+      </div>
+      <div id="content"></div>
     </div>
-    <div id="content"></div>
   </main>
 </div>
-<script src="/assets/common.js?v=4"></script>
+<script src="/assets/common.js?v=7"></script>
 <script>
 // Global error trap: tampilkan error JS langsung di layar supaya bisa dilihat user
 window.addEventListener('error', (e) => {
@@ -54,7 +61,7 @@ function renderError(msg) {
 async function render(view) {
   title.textContent = TITLES[view] || view;
   setActiveNav(view);
-  content.innerHTML = `<p class="muted">Memuat…</p>`;
+  showSkeleton(content);
   let ov;
   try {
     ov = await loadOverview();
@@ -63,7 +70,7 @@ async function render(view) {
     return;
   }
   if (!ov) return; // bounced to /login
-  document.getElementById('whoami').textContent = ov.user.email;
+  document.getElementById('whoami').innerHTML = `<span class="dot"></span> ${esc(ov.user.email)}`;
   content.innerHTML = `<p class="muted">Memuat ${TITLES[view] || view}…</p>`;
   if (view === 'overview') return renderOverview(ov);
   if (view === 'balance') return renderBalance(ov);
@@ -74,13 +81,13 @@ async function render(view) {
 }
 
 function renderOverview(d) {
-  const provs = d.providers.map(p => `<div class="card"><div class="lbl">${esc(p.name)}</div><div class="val" style="font-size:14px">${p.implemented ? 'Aktif' : 'Segera'}</div><div class="sub">${p.summary?.status || ''}</div></div>`).join('');
+  const provs = d.providers.map(p => `<div class="card"><div class="lbl">${esc(p.name)}</div><div class="val" style="font-size:14px">${p.implemented ? 'Aktif' : 'Segera'}</div><div class="sub">${esc(p.summary?.status || '')}</div></div>`).join('');
   content.innerHTML = `
     <div class="grid">
-      <div class="card"><div class="lbl">Saldo Tersedia</div><div class="val">${money(d.balance.available)}</div><div class="sub">Held: ${money(d.balance.held)}</div></div>
+      <div class="card accent"><div class="lbl">Saldo Tersedia</div><div class="val">${money(d.balance.available)}</div><div class="sub">Held: ${money(d.balance.held)}</div></div>
       <div class="card"><div class="lbl">Paket</div><div class="val" style="font-size:14px">${esc(d.subscription.plan || 'Gratis (H+1)')}</div><div class="sub">${d.subscription.active ? 'Aktif' : 'Tidak aktif'}</div></div>
       <div class="card"><div class="lbl">Invoice Lunas (30d)</div><div class="val">${d.stats.paid}</div><div class="sub">Volume ${money(d.stats.paid_volume)}</div></div>
-      <div class="card"><div class="lbl">API Keys</div><div class="val">${d.api_keys.length}</div><div class="sub">Max 5</div></div>
+      <div class="card"><div class="lbl">API Keys</div><div class="val">${d.api_keys.length}<small> / 5</small></div><div class="sub">Maksimal 5 key</div></div>
     </div>
     <div class="panel"><h3>Provider</h3><div class="grid">${provs}</div></div>
     <div class="panel"><h3>Akses Provider</h3><p class="hint">Tier Anda mengizinkan: <b>${esc(d.allowed_providers.join(', '))}</b></p></div>
@@ -92,7 +99,7 @@ function renderBalance(d) {
     <div class="grid">
       <div class="card"><div class="lbl">Saldo</div><div class="val">${money(d.balance.balance)}</div></div>
       <div class="card"><div class="lbl">Ditahan (Held)</div><div class="val">${money(d.balance.held)}</div></div>
-      <div class="card"><div class="lbl">Tersedia</div><div class="val">${money(d.balance.available)}</div></div>
+      <div class="card accent"><div class="lbl">Tersedia</div><div class="val">${money(d.balance.available)}</div></div>
     </div>
     <div class="panel">
       <h3>Ajukan Withdraw</h3>
@@ -114,15 +121,17 @@ function renderBalance(d) {
   `;
   document.getElementById('wd').addEventListener('submit', async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('wd-msg');
+    const btn = e.target.querySelector('.btn'); btn.disabled = true; btn.textContent = 'Memuat…';
     const r = await api('/app/api/withdraw', { method: 'POST', body: JSON.stringify({ amount: Number(f.amount), bank_detail: { method: 'bank', bank_name: f.bank_name, account_number: f.account_number, account_name: f.account_name } }) });
-    msg.textContent = r.success ? 'Diajukan. Menunggu proses admin.' : (r.message || 'Gagal'); msg.className = 'msg ' + (r.success ? 'ok' : 'err');
-    if (r.success) render('balance');
+    btn.disabled = false; btn.textContent = 'Ajukan';
+    if (r.success) { toast('Withdraw diajukan. Menunggu proses admin.', 'ok'); render('balance'); }
+    else { msg.textContent = r.message || 'Gagal'; msg.className = 'msg err'; toast(r.message || 'Gagal mengajukan withdraw', 'err'); }
   });
   (async () => {
     const [wd, lg] = await Promise.all([api('/app/api/withdrawals'), api('/app/api/ledger')]);
-    document.getElementById('wd-list').innerHTML = (wd.data || []).map(w => `<table><tr><td>${esc(w.id)}</td><td>${money(w.amount)}</td><td>${tag(w.status)}</td><td class="muted">${new Date(w.created_at).toLocaleString('id-ID')}</td>${w.status === 'requested' ? `<td><button class="btn sec" data-cancel="${esc(w.id)}">Batal</button></td>` : ''}</tr></table>`).join('') || '<p class="muted">Belum ada</p>';
-    document.getElementById('ldg-list').innerHTML = `<table><thead><tr><th>Waktu</th><th>Tipe</th><th>Nominal</th><th>Saldo setelah</th></tr></thead><tbody>${(lg.data || []).map(e => `<tr><td class="muted">${new Date(e.created_at).toLocaleString('id-ID')}</td><td>${esc(e.type)}</td><td>${money(e.amount)}</td><td>${money(e.balance_after)}</td></tr>`).join('')}</tbody></table>`;
-    document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => { await api('/app/api/withdrawals/' + b.dataset.cancel + '/cancel', { method: 'POST' }); render('balance'); });
+    document.getElementById('wd-list').innerHTML = (wd.data || []).length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Nominal</th><th>Status</th><th>Waktu</th><th></th></tr></thead><tbody>${(wd.data||[]).map(w => `<tr><td class="mono">${esc(w.id)}</td><td>${money(w.amount)}</td><td>${tag(w.status)}</td><td class="muted">${new Date(w.created_at).toLocaleString('id-ID')}</td>${w.status === 'requested' ? `<td><button class="btn danger sm" data-cancel="${esc(w.id)}">Batal</button></td>` : '<td></td>'}</tr>`).join('')}</tbody></table></div>` : '<p class="empty">Belum ada withdraw</p>';
+    document.getElementById('ldg-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Waktu</th><th>Tipe</th><th>Nominal</th><th>Saldo setelah</th></tr></thead><tbody>${(lg.data || []).map(e => `<tr><td class="muted">${new Date(e.created_at).toLocaleString('id-ID')}</td><td>${esc(e.type)}</td><td>${money(e.amount)}</td><td>${money(e.balance_after)}</td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => { await api('/app/api/withdrawals/' + b.dataset.cancel + '/cancel', { method: 'POST' }); toast('Withdraw dibatalkan', 'ok'); render('balance'); });
   })();
 }
 
@@ -144,14 +153,16 @@ function renderQris(d) {
   `;
   document.getElementById('qi').addEventListener('submit', async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('qi-msg');
+    const btn = e.target.querySelector('.btn'); btn.disabled = true; btn.textContent = 'Memuat…';
     const r = await api('/app/api/qris', { method: 'POST', body: JSON.stringify({ amount: Number(f.amount), provider: f.provider, reference: f.reference }) });
-    msg.textContent = r.success ? `QRIS dibuat: ${r.data.qris_id}` : (r.message || 'Gagal'); msg.className = 'msg ' + (r.success ? 'ok' : 'err');
-    if (r.success) window.open(`/qr/${r.data.qris_id}?amt=${r.data.amount}`, '_blank');
+    btn.disabled = false; btn.textContent = 'Buat QRIS';
+    if (r.success) { toast(`QRIS dibuat: ${r.data.qris_id}`, 'ok'); window.open(`/qr/${r.data.qris_id}?amt=${r.data.amount}`, '_blank'); }
+    else { msg.textContent = r.message || 'Gagal'; msg.className = 'msg err'; toast(r.message || 'Gagal membuat QRIS', 'err'); }
     loadQrisList();
   });
   async function loadQrisList() {
     const r = await api('/app/api/qris');
-    document.getElementById('qi-list').innerHTML = `<table><thead><tr><th>ID</th><th>Provider</th><th>Total</th><th>Status</th><th>Waktu</th></tr></thead><tbody>${(r.data || []).map(i => `<tr><td><a href="/qr/${esc(i.qris_id)}" target="_blank">${esc(i.qris_id)}</a></td><td>${esc(i.provider)}</td><td>${money(i.amount)}</td><td>${tag(i.status)}</td><td class="muted">${new Date(i.created_at).toLocaleString('id-ID')}</td></tr>`).join('')}</tbody></table>`;
+    document.getElementById('qi-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Provider</th><th>Total</th><th>Status</th><th>Waktu</th></tr></thead><tbody>${(r.data || []).map(i => `<tr><td><a href="/qr/${esc(i.qris_id)}" target="_blank" class="mono">${esc(i.qris_id)}</a></td><td>${esc(i.provider)}</td><td>${money(i.amount)}</td><td>${tag(i.status)}</td><td class="muted">${new Date(i.created_at).toLocaleString('id-ID')}</td></tr>`).join('')}</tbody></table></div>`;
   }
   loadQrisList();
 }
@@ -168,12 +179,13 @@ function renderKeys(d) {
   document.getElementById('kf').addEventListener('submit', async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('kf-msg');
     const r = await api('/app/api/keys', { method: 'POST', body: JSON.stringify(f) });
-    if (r.success) { msg.innerHTML = `Key (simpan!): <code>${esc(r.data.key)}</code>`; msg.className = 'msg ok'; loadKeys(); } else { msg.textContent = r.message || 'Gagal'; msg.className = 'msg err'; }
+    if (r.success) { msg.innerHTML = `Key (simpan!): <code>${esc(r.data.key)}</code>`; msg.className = 'msg ok'; toast('API Key dibuat. Simpan baik-baik!', 'ok'); loadKeys(); }
+    else { msg.textContent = r.message || 'Gagal'; msg.className = 'msg err'; toast(r.message || 'Gagal', 'err'); }
   });
   async function loadKeys() {
     const r = await api('/app/api/keys');
-    document.getElementById('kf-list').innerHTML = `<table><thead><tr><th>Prefix</th><th>Label</th><th>Status</th><th>Dibuat</th><th></th></tr></thead><tbody>${(r.data || []).map(k => `<tr><td><code>${esc(k.key_prefix)}</code></td><td>${esc(k.label || '')}</td><td>${tag(k.active ? 'active' : 'blocked')}</td><td class="muted">${new Date(k.created_at).toLocaleString('id-ID')}</td><td><button class="btn danger" data-rev="${k.id}">Cabut</button></td></tr>`).join('')}</tbody></table>`;
-    document.querySelectorAll('[data-rev]').forEach(b => b.onclick = async () => { await api('/app/api/keys/' + b.dataset.rev, { method: 'DELETE' }); loadKeys(); });
+    document.getElementById('kf-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Prefix</th><th>Label</th><th>Status</th><th>Dibuat</th><th></th></tr></thead><tbody>${(r.data || []).map(k => `<tr><td><code>${esc(k.key_prefix)}</code></td><td>${esc(k.label || '')}</td><td>${tag(k.active ? 'active' : 'blocked')}</td><td class="muted">${new Date(k.created_at).toLocaleString('id-ID')}</td><td><button class="btn danger sm" data-rev="${k.id}">Cabut</button></td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelectorAll('[data-rev]').forEach(b => b.onclick = async () => { await api('/app/api/keys/' + b.dataset.rev, { method: 'DELETE' }); toast('API Key dicabut', 'ok'); loadKeys(); });
   }
   loadKeys();
 }
@@ -183,12 +195,13 @@ function renderSubscription(d) {
     const [plans, sub] = await Promise.all([api('/app/api/plans'), api('/app/api/subscription')]);
     content.innerHTML = `
       <div class="panel"><h3>Status Langganan</h3><p>Paket: <b>${esc(sub.data.status.plan || 'Gratis (H+1)')}</b> ${tag(sub.data.status.active ? 'active' : 'EXPIRED')}<br>Sampai: ${sub.data.status.ends_at ? new Date(sub.data.status.ends_at + 'Z').toLocaleString('id-ID') : '-'}<br>Provider: ${esc(sub.data.status.providers.join(', '))}</p></div>
-      <div class="panel"><h3>Pilih Paket</h3><table><thead><tr><th>Paket</th><th>Tier</th><th>Provider</th><th>Harga</th><th>Durasi</th><th></th></tr></thead><tbody>${(plans.data || []).map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.tier)}</td><td>${esc(p.providers.join(', '))}</td><td>${money(p.price)}</td><td>${p.duration_days} hari</td><td>${p.price > 0 ? `<button class="btn" data-plan="${p.id}">Beli</button>` : '<span class="muted">Gratis</span>'}</td></tr>`).join('')}</tbody></table></div>
-      <div class="panel"><h3>Riwayat</h3><table><thead><tr><th>Order</th><th>Paket</th><th>Nominal</th><th>Status</th></tr></thead><tbody>${(sub.data.orders || []).map(o => `<tr><td>${esc(o.id)}</td><td>${esc(o.plan_name)}</td><td>${money(o.amount)}</td><td>${tag(o.status)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="panel"><h3>Pilih Paket</h3><div class="table-wrap"><table><thead><tr><th>Paket</th><th>Tier</th><th>Provider</th><th>Harga</th><th>Durasi</th><th></th></tr></thead><tbody>${(plans.data || []).map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.tier)}</td><td>${esc(p.providers.join(', '))}</td><td>${money(p.price)}</td><td>${p.duration_days} hari</td><td>${p.price > 0 ? `<button class="btn sm" data-plan="${p.id}">Beli</button>` : '<span class="muted">Gratis</span>'}</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="panel"><h3>Riwayat</h3><div class="table-wrap"><table><thead><tr><th>Order</th><th>Paket</th><th>Nominal</th><th>Status</th></tr></thead><tbody>${(sub.data.orders || []).map(o => `<tr><td class="mono">${esc(o.id)}</td><td>${esc(o.plan_name)}</td><td>${money(o.amount)}</td><td>${tag(o.status)}</td></tr>`).join('')}</tbody></table></div></div>
     `;
     document.querySelectorAll('[data-plan]').forEach(b => b.onclick = async () => {
       const r = await api('/app/api/subscription/orders', { method: 'POST', body: JSON.stringify({ plan_id: Number(b.dataset.plan) }) });
-      if (r.success && r.data.qris_id) window.open(`/qr/${r.data.qris_id}?amt=${r.data.amount}`, '_blank');
+      if (r.success && r.data.qris_id) { toast('Order dibuat. Scan QR untuk bayar.', 'ok'); window.open(`/qr/${r.data.qris_id}?amt=${r.data.amount}`, '_blank'); }
+      else toast(r.message || 'Gagal membuat order', 'err');
     });
   })();
 }
@@ -209,13 +222,12 @@ function renderWebhooks(d) {
   document.getElementById('wh').addEventListener('submit', async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('wh-msg');
     const r = await api('/app/api/webhooks', { method: 'POST', body: JSON.stringify(f) });
-    msg.textContent = r.success ? 'Terdaftar' : (r.message || 'Gagal'); msg.className = 'msg ' + (r.success ? 'ok' : 'err');
-    if (r.success) loadWh();
+    if (r.success) { toast('Webhook terdaftar', 'ok'); loadWh(); } else { msg.textContent = r.message || 'Gagal'; msg.className = 'msg err'; }
   });
   async function loadWh() {
     const r = await api('/app/api/webhooks');
-    document.getElementById('wh-list').innerHTML = `<table><thead><tr><th>URL</th><th>Events</th><th></th></tr></thead><tbody>${(r.data || []).map(w => `<tr><td>${esc(w.url)}</td><td>${esc(w.events.join(', '))}</td><td><button class="btn danger" data-del="${esc(w.id)}">Hapus</button></td></tr>`).join('')}</tbody></table>`;
-    document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { await api('/app/api/webhooks/' + b.dataset.del, { method: 'DELETE' }); loadWh(); });
+    document.getElementById('wh-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>URL</th><th>Events</th><th></th></tr></thead><tbody>${(r.data || []).map(w => `<tr><td class="mono">${esc(w.url)}</td><td>${esc(w.events.join(', '))}</td><td><button class="btn danger sm" data-del="${esc(w.id)}">Hapus</button></td></tr>`).join('')}</tbody></table></div>`;
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { await api('/app/api/webhooks/' + b.dataset.del, { method: 'DELETE' }); toast('Webhook dihapus', 'ok'); loadWh(); });
   }
   loadWh();
 }
