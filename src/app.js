@@ -15,7 +15,7 @@ function createApp() {
   app.use(attachUser);
 
   const pub = path.join(__dirname, '..', 'public');
-  app.use('/assets', express.static(path.join(pub, 'assets'), { maxAge: '1h' }));
+  app.use('/assets', express.static(path.join(pub, 'assets'), { maxAge: '5m' }));
   app.get('/qris.css', (_req, res) => res.sendFile(path.join(pub, 'qris.css')));
   app.get('/qris.js', (_req, res) => res.sendFile(path.join(pub, 'qris.js')));
 
