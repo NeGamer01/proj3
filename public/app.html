@@ -7,7 +7,7 @@
 <title>QRISPay — Dashboard</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/logo.svg">
-<link rel="stylesheet" href="/assets/app.css?v=7">
+<link rel="stylesheet" href="/assets/app.css?v=17">
 </head>
 <body>
 <div class="layout">
@@ -40,7 +40,7 @@
     </div>
   </main>
 </div>
-<script src="/assets/common.js?v=7"></script>
+<script src="/assets/common.js?v=17"></script>
 <script>
 // Global error trap: tampilkan error JS langsung di layar supaya bisa dilihat user
 window.addEventListener('error', (e) => {
@@ -81,7 +81,7 @@ async function render(view) {
 }
 
 function renderOverview(d) {
-  const provs = d.providers.map(p => `<div class="card"><div class="lbl">${esc(p.name)}</div><div class="val" style="font-size:14px">${p.implemented ? 'Aktif' : 'Segera'}</div><div class="sub">${esc(p.summary?.status || '')}</div></div>`).join('');
+  const provs = d.providers.map(p => `<div class="card"><div class="lbl">${esc(p.label)}</div><div class="val" style="font-size:14px">${p.implemented ? 'Aktif' : 'Segera'}</div><div class="sub">${esc(p.summary?.status || '')}</div></div>`).join('');
   content.innerHTML = `
     <div class="grid">
       <div class="card accent"><div class="lbl">Saldo Tersedia</div><div class="val">${money(d.balance.available)}</div><div class="sub">Held: ${money(d.balance.held)}</div></div>
@@ -89,9 +89,43 @@ function renderOverview(d) {
       <div class="card"><div class="lbl">Invoice Lunas (30d)</div><div class="val">${d.stats.paid}</div><div class="sub">Volume ${money(d.stats.paid_volume)}</div></div>
       <div class="card"><div class="lbl">API Keys</div><div class="val">${d.api_keys.length}<small> / 5</small></div><div class="sub">Maksimal 5 key</div></div>
     </div>
-    <div class="panel"><h3>Provider</h3><div class="grid">${provs}</div></div>
-    <div class="panel"><h3>Akses Provider</h3><p class="hint">Tier Anda mengizinkan: <b>${esc(d.allowed_providers.join(', '))}</b></p></div>
+    <div class="panel">
+      <h3>Metode Pembayaran</h3>
+      <div class="chan-toggle">
+        <div class="seg" id="chanSeg">
+          <span class="thumb"></span>
+          <button type="button" data-speed="qris" aria-pressed="${d.provider_choice !== 'gopay'}">QRIS<small>H+1</small></button>
+          <button type="button" data-speed="realtime" aria-pressed="${d.provider_choice === 'gopay'}" ${d.can_use_realtime ? '' : 'disabled'} title="QRIS Realtime butuh paket prioritas">QRIS Realtime<small>H+0</small><span class="lock-hint">🔒 Prioritas</span></button>
+        </div>
+        <div>
+          <div class="chan-side">${d.provider_choice === 'gopay' ? 'H+0 · langsung' : 'H+1 · settlement besok'}</div>
+          ${d.can_use_realtime ? '' : `<div class="lock-cta"><span class="tag warn">Prioritas</span> <a href="#subscription" data-goto-sub>Buka paket</a> untuk QRIS Realtime</div>`}
+        </div>
+      </div>
+      <p class="hint" style="margin-top:12px">Metode <b>QRIS</b> tersedia untuk semua user. Metode <b>QRIS Realtime</b> (H+0) hanya untuk paket Prioritas.</p>
+     </div>
+    <div class="panel"><h3>Status Metode</h3><div class="grid">${provs}</div></div>
+    <div class="panel"><h3>Metode Tersedia</h3><p class="hint">Paket Anda: <b>${d.can_use_realtime ? 'QRIS + QRIS Realtime' : 'QRIS (H+1)'}</b></p></div>
   `;
+  const seg = document.getElementById('chanSeg');
+  if (seg) {
+    const setBusy = (on) => { seg.querySelectorAll('button').forEach(b => b.disabled = on); };
+    seg.querySelectorAll('button[data-speed]').forEach((btn) => {
+      const origDisabled = btn.disabled;
+      btn.addEventListener('click', async () => {
+        const next = btn.dataset.speed; // "qris" | "realtime" — a speed, not a provider
+        const isRt = next === 'realtime';
+        if (seg.classList.contains('rt') === isRt) return; // sudah di posisi ini
+        setBusy(true);
+        const r = await api('/app/api/prefs', { method: 'PUT', body: JSON.stringify({ provider_choice: isRt ? 'gopay' : 'shopeepay' }) });
+        setBusy(false);
+        if (r.success) { toast(`Metode: ${isRt ? 'QRIS Realtime' : 'QRIS'}`, 'ok'); render('overview'); }
+        else { toast(r.message || 'Gagal mengubah metode', 'err'); btn.disabled = origDisabled; }
+      });
+    });
+  }
+  const goSub = document.querySelector('[data-goto-sub]');
+  if (goSub) goSub.onclick = (e) => { e.preventDefault(); location.hash = 'subscription'; render('subscription'); };
 }
 
 function renderBalance(d) {
@@ -142,19 +176,20 @@ function renderQris(d) {
       <form id="qi" class="form">
         <div class="row">
           <label>Nominal (base)<input name="amount" type="number" min="1000" required></label>
-          <label>Provider<select name="provider">${d.allowed_providers.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}</select></label>
+          <label>Metode<input class="mono" value="${esc(d.provider_choice === 'gopay' ? 'QRIS Realtime' : 'QRIS')}" readonly style="cursor:default"></label>
           <label>Reference<input name="reference" placeholder="TEST"></label>
         </div>
         <button class="btn" type="submit">Buat QRIS</button>
       </form>
       <p id="qi-msg" class="msg"></p>
+      <p class="hint">Metode dipilih di halaman Overview. Yang dipakai sekarang: <b>${esc(d.provider_label)}</b> ${d.provider_choice === 'gopay' ? '(H+0)' : '(H+1)'}.</p>
     </div>
     <div class="panel"><h3>Invoice Terbaru</h3><div id="qi-list"></div></div>
   `;
   document.getElementById('qi').addEventListener('submit', async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const msg = document.getElementById('qi-msg');
     const btn = e.target.querySelector('.btn'); btn.disabled = true; btn.textContent = 'Memuat…';
-    const r = await api('/app/api/qris', { method: 'POST', body: JSON.stringify({ amount: Number(f.amount), provider: f.provider, reference: f.reference }) });
+    const r = await api('/app/api/qris', { method: 'POST', body: JSON.stringify({ amount: Number(f.amount), reference: f.reference }) });
     btn.disabled = false; btn.textContent = 'Buat QRIS';
     if (r.success) { toast(`QRIS dibuat: ${r.data.qris_id}`, 'ok'); window.open(`/qr/${r.data.qris_id}?amt=${r.data.amount}`, '_blank'); }
     else { msg.textContent = r.message || 'Gagal'; msg.className = 'msg err'; toast(r.message || 'Gagal membuat QRIS', 'err'); }
@@ -162,7 +197,7 @@ function renderQris(d) {
   });
   async function loadQrisList() {
     const r = await api('/app/api/qris');
-    document.getElementById('qi-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Provider</th><th>Total</th><th>Status</th><th>Waktu</th></tr></thead><tbody>${(r.data || []).map(i => `<tr><td><a href="/qr/${esc(i.qris_id)}" target="_blank" class="mono">${esc(i.qris_id)}</a></td><td>${esc(i.provider)}</td><td>${money(i.amount)}</td><td>${tag(i.status)}</td><td class="muted">${new Date(i.created_at).toLocaleString('id-ID')}</td></tr>`).join('')}</tbody></table></div>`;
+    document.getElementById('qi-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Metode</th><th>Total</th><th>Status</th><th>Waktu</th></tr></thead><tbody>${(r.data || []).map(i => `<tr><td><a href="/qr/${esc(i.qris_id)}" target="_blank" class="mono">${esc(i.qris_id)}</a></td><td>${esc(i.provider === 'gopay' ? 'QRIS Realtime' : 'QRIS')}</td><td>${money(i.amount)}</td><td>${tag(i.status)}</td><td class="muted">${new Date(i.created_at).toLocaleString('id-ID')}</td></tr>`).join('')}</tbody></table></div>`;
   }
   loadQrisList();
 }
@@ -194,8 +229,12 @@ function renderSubscription(d) {
   (async () => {
     const [plans, sub] = await Promise.all([api('/app/api/plans'), api('/app/api/subscription')]);
     content.innerHTML = `
-      <div class="panel"><h3>Status Langganan</h3><p>Paket: <b>${esc(sub.data.status.plan || 'Gratis (H+1)')}</b> ${tag(sub.data.status.active ? 'active' : 'EXPIRED')}<br>Sampai: ${sub.data.status.ends_at ? new Date(sub.data.status.ends_at + 'Z').toLocaleString('id-ID') : '-'}<br>Provider: ${esc(sub.data.status.providers.join(', '))}</p></div>
-      <div class="panel"><h3>Pilih Paket</h3><div class="table-wrap"><table><thead><tr><th>Paket</th><th>Tier</th><th>Provider</th><th>Harga</th><th>Durasi</th><th></th></tr></thead><tbody>${(plans.data || []).map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.tier)}</td><td>${esc(p.providers.join(', '))}</td><td>${money(p.price)}</td><td>${p.duration_days} hari</td><td>${p.price > 0 ? `<button class="btn sm" data-plan="${p.id}">Beli</button>` : '<span class="muted">Gratis</span>'}</td></tr>`).join('')}</tbody></table></div></div>
+      <div class="panel"><h3>Status Langganan</h3><p>Paket: <b>${esc(sub.data.status.plan || 'Gratis (H+1)')}</b> ${tag(sub.data.status.active ? 'active' : 'EXPIRED')}<br>Sampai: ${sub.data.status.ends_at ? new Date(sub.data.status.ends_at + 'Z').toLocaleString('id-ID') : '-'}<br>Metode: <b>${sub.data.status.providers.includes('gopay') ? 'QRIS + QRIS Realtime' : 'QRIS (H+1)'}</b></p></div>
+      <div class="panel"><h3>Pilih Paket</h3><div class="table-wrap"><table><thead><tr><th>Paket</th><th>Settlement</th><th>Metode</th><th>Harga</th><th>Durasi</th><th></th></tr></thead><tbody>${(plans.data || []).map(p => {
+        const isPriority = (p.providers || []).includes('gopay');
+        return `<tr><td>${esc(p.name)} ${isPriority ? '<span class="badge">Prioritas</span>' : ''}</td><td>${esc(p.tier === 'H0' ? 'H+0' : 'H+1')}</td><td>${isPriority ? 'QRIS + QRIS Realtime' : 'QRIS'}</td><td>${money(p.price)}</td><td>${p.duration_days} hari</td><td>${p.price > 0 ? `<button class="btn sm" data-plan="${p.id}">Beli</button>` : '<span class="muted">Gratis</span>'}</td></tr>`;
+      }).join('')}</tbody></table></div>
+      <p class="hint" style="margin-top:10px">Paket berbadge <b>Prioritas</b> memungkinkan metode <b>QRIS Realtime</b> (H+0) di halaman Overview.</p></div>
       <div class="panel"><h3>Riwayat</h3><div class="table-wrap"><table><thead><tr><th>Order</th><th>Paket</th><th>Nominal</th><th>Status</th></tr></thead><tbody>${(sub.data.orders || []).map(o => `<tr><td class="mono">${esc(o.id)}</td><td>${esc(o.plan_name)}</td><td>${money(o.amount)}</td><td>${tag(o.status)}</td></tr>`).join('')}</tbody></table></div></div>
     `;
     document.querySelectorAll('[data-plan]').forEach(b => b.onclick = async () => {

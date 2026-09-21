@@ -37,6 +37,19 @@ async function upsertPlan({ id, code, name, duration_days, price, tier = 'H1', p
   return db.one('SELECT * FROM plans WHERE id = ?', [r.insertId]);
 }
 
+/** Delete a plan. Refuses when subscriptions or orders already reference it. */
+async function deletePlan(id) {
+  const used = await db.one(
+    `SELECT (SELECT COUNT(*) FROM subscriptions WHERE plan_id = ?) AS subs,
+            (SELECT COUNT(*) FROM subscription_orders WHERE plan_id = ?) AS orders`, [id, id]);
+  if (used.subs > 0 || used.orders > 0) {
+    throw new SubscriptionError('Paket sudah dipakai oleh langganan/order. Nonaktifkan saja, jangan dihapus.', 409, 'PLAN_IN_USE');
+  }
+  const r = await db.query('DELETE FROM plans WHERE id = ?', [id]);
+  if (!r.affectedRows) throw new SubscriptionError('Paket tidak ditemukan', 404, 'PLAN_NOT_FOUND');
+  return { deleted: true };
+}
+
 /** Active subscription row (ends_at in the future) or null. Admins are always "active". */
 async function getActiveSubscription(userId) {
   return db.one(
@@ -67,6 +80,30 @@ async function allowedProviders(userId, role) {
   return parseProviders(sub.providers);
 }
 
+/**
+ * Can the user pick the realtime (H0) channel? Admins always can; everyone else
+ * needs an active subscription whose plan grants the gopay provider.
+ */
+async function canUseRealtime(userId, role) {
+  if (role === 'admin') return true;
+  const sub = await getActiveSubscription(userId);
+  if (!sub) return false;
+  return parseProviders(sub.providers).includes('gopay');
+}
+
+/**
+ * Resolve the user's dashboard provider choice into a concrete provider name the
+ * API layer is allowed to use. Falls back to the tier default when the chosen
+ * provider is not permitted (e.g. realtime picked without an active plan).
+ * Returns { provider, ok } — ok=false means the choice is locked for this user.
+ */
+async function resolveChoice(userId, role, choice) {
+  const allowed = await allowedProviders(userId, role);
+  const picked = String(choice || '').toLowerCase();
+  if (picked && allowed.includes(picked)) return { provider: picked, ok: true };
+  return { provider: allowed[0] || 'shopeepay', ok: false };
+}
+
 /** Extends from the current end date if still active, otherwise from now. */
 async function grant(userId, { planId = null, days, source = 'manual', note = null }) {
   const active = await getActiveSubscription(userId);
@@ -86,8 +123,12 @@ async function listSubscriptions(userId) {
 
 /** The operator user who owns the billing provider accounts (defaults to first admin). */
 async function getBillingAdmin() {
-  const id = (await db.one("SELECT value FROM app_settings WHERE `key` = 'billing_admin_user_id'"))?.value;
-  if (id) return db.one("SELECT id FROM users WHERE id = ? AND role = 'admin'", [id]);
+  const row = await db.one("SELECT value FROM app_settings WHERE `key` = 'billing_admin_user_id'");
+  const id = row && row.value != null && row.value !== '' ? Number(row.value) : null;
+  if (id) {
+    const byId = await db.one('SELECT id FROM users WHERE id = ? AND role = ?', [id, 'admin']);
+    if (byId) return byId;
+  }
   return db.one("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1");
 }
 
@@ -113,7 +154,7 @@ async function createOrder(userId, planId, createInvoice) {
   } catch (e) {
     throw new SubscriptionError(`Gagal membuat QRIS pembayaran: ${e.message}`, 503, 'BILLING_QRIS_FAILED');
   }
-  await db.query('INSERT INTO subscription_orders (id, user_id, plan_id, amount, qris_id) VALUES (?,?,?,?,?)', [orderId, userId, plan.id, invoice.total_amount, invoice.qris_id]);
+  await db.query('INSERT INTO subscription_orders (id, user_id, plan_id, amount, qris_id) VALUES (?,?,?,?,?)', [orderId, userId, plan.id, invoice.amount ?? invoice.total_amount, invoice.qris_id]);
   logActivity(userId, 'INFO', `Order langganan ${orderId} (${plan.name}) Rp ${invoice.total_amount}`);
   return getOrder(userId, orderId);
 }
@@ -153,4 +194,4 @@ async function listOrders({ userId = null, limit = 50 }) {
   return db.query(`SELECT o.id, o.user_id, u.email, o.amount, o.status, o.created_at, o.paid_at, p.name plan_name FROM subscription_orders o JOIN plans p ON p.id = o.plan_id JOIN users u ON u.id = o.user_id ORDER BY o.created_at DESC LIMIT ${lim}`);
 }
 
-module.exports = { SubscriptionError, parseProviders, listPlans, upsertPlan, getActiveSubscription, subscriptionStatus, allowedProviders, grant, listSubscriptions, createOrder, getOrder, settleOrder, listOrders, getBillingAdmin };
+module.exports = { SubscriptionError, parseProviders, listPlans, upsertPlan, deletePlan, getActiveSubscription, subscriptionStatus, allowedProviders, canUseRealtime, resolveChoice, grant, listSubscriptions, createOrder, getOrder, settleOrder, listOrders, getBillingAdmin };

@@ -11,11 +11,13 @@ class QrisError extends Error {
   constructor(message, status = 400, code = 'BAD_REQUEST') { super(message); this.status = status; this.code = code; }
 }
 
+const { providerLabel } = require('../utils/displayNames');
+
 /** Poll status; checks provider mutasi when pending. Returns API-shaped object. */
 async function checkStatus(id) {
   const rec = await invoices.getRecord(id);
   if (!rec) throw new QrisError('Invoice tidak ditemukan', 404, 'NOT_FOUND');
-  const base = { qris_id: rec.id, reference: rec.reference, attributes: rec.attributes, amount: rec.total_amount, provider: rec.provider };
+  const base = { qris_id: rec.id, reference: rec.reference, attributes: rec.attributes, amount: rec.total_amount, provider: rec.provider, provider_label: providerLabel(rec.provider) };
 
   if (rec.status === 'PAID') return { ...base, paid: true, status: 'PAID', transaction: rec.transaction };
 

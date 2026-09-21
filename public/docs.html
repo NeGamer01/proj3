@@ -7,7 +7,7 @@
 <title>QRISPay — Dokumentasi API</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/logo.svg">
-<link rel="stylesheet" href="/assets/app.css?v=7">
+<link rel="stylesheet" href="/assets/app.css?v=14">
 </head>
 <body>
 <div class="docs-wrap">
@@ -31,11 +31,11 @@
 x-api-key: ***
 Content-Type: application/json
 
-{ "amount": 10000, "provider": "gopay", "reference": "INV-1", "callback_url": "https://yourbot/webhook" }
+{ "amount": 10000, "provider": "qris", "reference": "INV-1", "callback_url": "https://yourbot/webhook" }
 
 → 201
 { "success": true, "data": { "qris_id": "...", "qris_code": "000201...", "qr_url": "/qr/...", "amount": 10021, "expires_at": "..." } }</code></pre>
-    <p class="hint"><b>amount</b> = nominal dasar (base). Gateway menambahkan kode unik (21–200) untuk matching. <b>provider</b> opsional — kalo di-omit, dipilih otomatis sesuai tier langganan. Hanya provider yang diizinkan tier Anda yang bisa dipakai.</p>
+    <p class="hint"><b>amount</b> = nominal dasar (base). Gateway menambahkan kode unik (21–200) untuk matching. <b>provider</b> opsional — nilai yang diterima: <code>"qris"</code> (H+1, default) atau <code>"realtime"</code> (H+0, butuh paket prioritas). Jika di-omit, dipilih otomatis sesuai tier langganan. Hanya provider yang diizinkan tier Anda yang bisa dipakai.</p>
   </div>
 
   <div class="panel">
@@ -76,12 +76,12 @@ crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(req.headers['x-webhook-sign
   </div>
 
   <div class="panel">
-    <h3>Tier & Provider</h3>
+    <h3>Metode Pembayaran</h3>
     <ul>
-      <li><b>H+1 (ShopeePay)</b> — gratis, untuk semua user. Settlement H+1.</li>
-      <li><b>H0 (GoPay)</b> — khusus langganan berbayar. Settlement H+0 (lebih cepat cair).</li>
+      <li><b>QRIS</b> — gratis, untuk semua user. Settlement H+1.</li>
+      <li><b>QRIS Realtime</b> — khusus langganan paket prioritas. Settlement H+0 (lebih cepat cair).</li>
     </ul>
-    <p class="hint">Provider lain selain yang diizinkan tier → <code>403 PROVIDER_NOT_PERMITTED</code>.</p>
+    <p class="hint">Pilih metode dari dashboard (menu Overview) atau lewat API. Metode selain yang diizinkan tier Anda → <code>403 PROVIDER_NOT_PERMITTED</code>.</p>
   </div>
 </div>
 <script>document.getElementById('base').textContent = location.origin;</script>

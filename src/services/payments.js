@@ -46,7 +46,10 @@ async function settle(invoice, tx) {
   }
 
   // Webhook + callback (best-effort).
-  webhooks.dispatchWebhookEvent(rec.user_id, 'payment.success', { transaction, qris_id: rec.id, amount: rec.total_amount, base_amount: rec.base_amount, provider: rec.provider }).catch(() => {});
+  // Public webhook payload must never leak the internal provider name — bots
+  // integrate against "QRIS" / settlement speed, not gopay/shopeepay.
+  const publicData = { transaction, qris_id: rec.id, amount: rec.total_amount, base_amount: rec.base_amount };
+  webhooks.dispatchWebhookEvent(rec.user_id, 'payment.success', publicData).catch(() => {});
   if (rec.callback_url) {
     const axios = require('axios');
     axios.post(rec.callback_url, { event: 'payment.success', qris_id: rec.id, reference: rec.reference, amount: rec.total_amount, transaction }, { timeout: 8000 }).catch(() => {});

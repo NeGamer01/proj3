@@ -283,6 +283,49 @@ code { font-family: var(--mono); font-size: 12.5px; color: #c7d2fe; }
 .empty { color: var(--muted); font-style: italic; padding: 12px 0; text-align: center; }
 .divider { height: 1px; background: var(--line); margin: 16px 0; }
 
+/* ── channel toggle: compact segmented control (QRIS <-> QRIS Realtime) ── */
+.chan-toggle { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.chan-toggle .seg {
+  position: relative; display: inline-flex; padding: 3px;
+  border-radius: 11px; background: var(--bg2); border: 1px solid var(--line);
+  flex: 0 1 auto; max-width: 100%; overflow: hidden;
+}
+.chan-toggle .seg button {
+  position: relative; z-index: 1; flex: 1 1 0; min-width: 0;
+  border: 0; background: transparent; cursor: pointer;
+  padding: 8px 12px; border-radius: 8px; font: inherit; color: var(--muted);
+  font-size: 12.5px; font-weight: 700; letter-spacing: .2px; white-space: nowrap;
+  transition: color .16s;
+  display: flex; align-items: center; justify-content: center; gap: 6px; line-height: 1.2;
+}
+.chan-toggle .seg button small {
+  font-size: 10px; font-weight: 700; letter-spacing: .4px; opacity: .7;
+  padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,.06);
+}
+.chan-toggle .seg button[aria-pressed="true"] { color: #fff; }
+.chan-toggle .seg .thumb {
+  position: absolute; top: 3px; left: 3px; height: calc(100% - 6px);
+  width: calc(50% - 3px); border-radius: 8px;
+  background: linear-gradient(180deg, var(--panel3), var(--panel2));
+  border: 1px solid var(--line2); box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  transition: transform .2s cubic-bezier(.3,.9,.3,1), background .18s, border-color .18s, box-shadow .18s;
+}
+.chan-toggle .seg.rt .thumb {
+  transform: translateX(calc(100% + 0px));
+  background: linear-gradient(180deg, rgba(110,231,183,.30), rgba(52,211,153,.16));
+  border-color: rgba(52,211,153,.55); box-shadow: 0 0 14px rgba(52,211,153,.24);
+}
+.chan-toggle .seg:has(button:disabled) { opacity: .5; }
+.chan-toggle .seg button:disabled { cursor: not-allowed; }
+.chan-toggle .seg:has(button:disabled):hover .lock-hint { opacity: 1; transform: translateY(0); }
+.chan-toggle .seg .lock-hint {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%) translateY(2px);
+  font-size: 10px; opacity: 0; transition: opacity .15s, transform .15s; pointer-events: none;
+  color: var(--warn);
+}
+.chan-toggle .chan-side { font-size: 11px; font-weight: 700; letter-spacing: .6px; color: var(--muted2); }
+.chan-toggle .lock-cta { font-size: 12.5px; }
+
 /* ── QR page ── */
 .qr-page {
   min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 20px;
@@ -381,6 +424,10 @@ code { font-family: var(--mono); font-size: 12.5px; color: #c7d2fe; }
   table { min-width: 560px; }
   .auth-card { padding: 24px 20px; }
   #toasts { left: 14px; right: 14px; max-width: none; }
+  /* channel toggle: keep both options visible & balanced on small screens */
+  .chan-toggle .seg { flex: 1 1 260px; max-width: 100%; }
+  .chan-toggle .seg button { padding: 9px 6px; font-size: 12px; }
+  .chan-toggle .seg button small { font-size: 9.5px; padding: 1px 4px; }
 }
 @media (max-width: 520px) {
   .grid { grid-template-columns: 1fr 1fr; }

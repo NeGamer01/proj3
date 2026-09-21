@@ -11,6 +11,7 @@ const providers = require('../providers');
 const withdrawals = require('../services/withdrawals');
 const ledger = require('../services/ledger');
 const { listLogs, logActivity } = require('../services/logs');
+const { providerLabel } = require('../utils/displayNames');
 const { hashPassword } = require('../services/users');
 
 const router = Router();
@@ -24,7 +25,6 @@ const strid = (p) => (Array.isArray(p) ? p[0] : p) || '';
 router.get('/overview', wrap(async (req, res) => {
   const [counts, st, revenue, recentOrders, provs, recentWithdrawals] = await Promise.all([
     db.one(`SELECT (SELECT COUNT(*) FROM users WHERE role='user') users,
-                   (SELECT COUNT(*) FROM users WHERE role='user' AND status='blocked') blocked,
                    (SELECT COUNT(DISTINCT user_id) FROM subscriptions WHERE ends_at > UTC_TIMESTAMP()) active_subs,
                    (SELECT COUNT(*) FROM api_keys WHERE active=1) api_keys,
                    (SELECT COUNT(*) FROM invoices WHERE status='PENDING') pending_invoices,
@@ -99,10 +99,43 @@ router.delete('/users/:id', wrap(async (req, res) => {
 router.get('/plans', wrap(async (_req, res) => res.json({ success: true, data: await subs.listPlans(true) })));
 router.post('/plans', wrap(async (req, res) => res.status(201).json({ success: true, data: await subs.upsertPlan(req.body || {}) })));
 router.put('/plans/:id', wrap(async (req, res) => res.json({ success: true, data: await subs.upsertPlan({ ...(req.body || {}), id: pid(req.params.id) }) })));
+router.delete('/plans/:id', wrap(async (req, res) => {
+  const r = await subs.deletePlan(pid(req.params.id));
+  logActivity(req.user.id, 'INFO', `Paket #${pid(req.params.id)} dihapus oleh admin ${req.user.email}`);
+  res.json({ success: true, data: r });
+}));
 
 // ── providers (operator accounts: configure static QR, OTP login, health) ──
 router.get('/providers', wrap(async (_req, res) => {
-  res.json({ success: true, data: await Promise.all(providers.listProviders().map(async (n) => ({ name: n, implemented: providers.isImplemented(n), summary: await providers.getProvider(n).summary() }))) });
+  const channelRouter = require('../services/channelRouter');
+  const health = require('../services/providerHealth');
+  const data = await Promise.all(providers.listProviders().map(async (n) => {
+    const h = health.getStatus(n);
+    const connected = await channelRouter.isConnected(n).catch(() => false);
+    return {
+      name: n,
+      label: providerLabel(n),
+      implemented: providers.isImplemented(n),
+      health: h,                 // { state, reason, lastErrorAt, downSince }
+      connected,                 // session + static QR mounted?
+      realtime_capable: channelRouter.REALTIME_CAPABLE.includes(n),
+      summary: await providers.getProvider(n).summary()
+    };
+  }));
+  res.json({ success: true, data });
+}));
+
+// Admin manual override: force a provider UP/DOWN (bypassing auto detection).
+// POST /admin/api/providers/:name/health { state: 'up'|'down'|'auto', reason? }
+router.post('/providers/:name/health', wrap(async (req, res) => {
+  const name = strid(req.params.name);
+  if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
+  const health = require('../services/providerHealth');
+  const state = String(req.body?.state || '').toLowerCase();
+  if (!['up', 'down', 'auto'].includes(state)) return res.status(400).json({ success: false, message: "state harus 'up', 'down', atau 'auto'" });
+  health.setOverride(name, state === 'auto' ? null : state, req.body?.reason || (state === 'down' ? 'Dipaksa admin' : 'Dipulihkan admin'));
+  logActivity(req.user.id, 'INFO', `Status ${providerLabel(name)} diatur admin = ${state}`);
+  res.json({ success: true, data: health.getStatus(name) });
 }));
 
 router.put('/providers/:name/static-qris', wrap(async (req, res) => {
@@ -120,14 +153,97 @@ router.put('/providers/:name/static-qris', wrap(async (req, res) => {
 // in-memory so the admin only ever types the SMS code (like nikipayv2's wizard).
 const pendingOtps = new Map();
 
+// ── ShopeePay B1: paste manual B: token + pick store ──
+
+// Install a manually pasted B:... merchant token. Discovers stores and returns
+// them so the admin can pick one. The token is stored encrypted (like GoPay's
+// access_token) and never logged.
+router.post('/providers/:name/token', wrap(async (req, res) => {
+  const name = strid(req.params.name);
+  if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
+  const prov = providers.getProvider(name);
+  if (typeof prov.setManualToken !== 'function') return res.status(400).json({ success: false, message: 'Provider ini tidak mendukung token manual' });
+  const token = String(req.body?.token || '').trim();
+  const storeId = req.body?.store_id ? String(req.body.store_id) : null;
+  if (!token) return res.status(400).json({ success: false, code: 'BAD_TOKEN', message: 'Token tidak boleh kosong' });
+  try {
+    const r = await prov.setManualToken(token, { storeId });
+    logActivity(req.user.id, 'SUCCESS', `Provider ${name} token B1 dipasang (store ${r.store_id})`);
+    res.json({ success: true, data: r });
+  } catch (e) {
+    res.status(e.status || 502).json({ success: false, code: e.code, message: e.message });
+  }
+}));
+
+// List stores for the currently installed token (store picker).
+router.get('/providers/:name/stores', wrap(async (req, res) => {
+  const name = strid(req.params.name);
+  if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
+  const prov = providers.getProvider(name);
+  if (typeof prov.listStoresForCurrentToken !== 'function') return res.status(400).json({ success: false, message: 'Provider ini tidak mendukung store list' });
+  try {
+    const s = await prov.summary();
+    res.json({ success: true, data: { stores: await prov.listStoresForCurrentToken(), current_store_id: s?.store_id || null } });
+  } catch (e) {
+    res.status(e.status || 502).json({ success: false, code: e.code, message: e.message });
+  }
+}));
+
+// Point the session at another store id.
+router.post('/providers/:name/store', wrap(async (req, res) => {
+  const name = strid(req.params.name);
+  if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
+  const prov = providers.getProvider(name);
+  if (typeof prov.selectStore !== 'function') return res.status(400).json({ success: false, message: 'Provider ini tidak mendukung store selection' });
+  const storeId = String(req.body?.store_id || '').trim();
+  if (!storeId) return res.status(400).json({ success: false, code: 'BAD_STORE', message: 'store_id tidak boleh kosong' });
+  try {
+    const r = await prov.selectStore(storeId);
+    logActivity(req.user.id, 'INFO', `Provider ${name} store dipilih: ${storeId}`);
+    res.json({ success: true, data: r });
+  } catch (e) {
+    res.status(e.status || 502).json({ success: false, code: e.code, message: e.message });
+  }
+}));
+
+// Device-risk blob (see docs/shopee/device-risk.md): without a real browser
+// fingerprint the issuer returns a *degraded* risk token and OTP delivery is
+// silently suppressed. Admin pastes their own captured blob; stored on the
+// provider instance (in-memory, per process).
+router.post('/providers/:name/device-report', wrap(async (req, res) => {
+  const name = strid(req.params.name);
+  if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
+  const prov = providers.getProvider(name);
+  if (typeof prov.setDeviceReport !== 'function') return res.status(400).json({ success: false, message: 'Provider ini tidak mendukung device report' });
+  const blob = typeof req.body?.blob === 'string' ? req.body.blob.trim() : '';
+  if (!blob || blob.length < 50) return res.status(400).json({ success: false, code: 'BAD_REPORT', message: 'Device report terlalu pendek / tidak valid' });
+  try {
+    prov.setDeviceReport(blob);
+    logActivity(req.user.id, 'INFO', `Provider ${name} device-risk blob dipasang (${blob.length} bytes)`);
+    res.json({ success: true, data: { length: blob.length } });
+  } catch (e) {
+    res.status(e.status || 502).json({ success: false, code: e.code, message: e.message });
+  }
+}));
+
 router.post('/providers/:name/otp', wrap(async (req, res) => {
   const name = strid(req.params.name);
   if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
   const prov = providers.getProvider(name);
   try {
-    const r = await prov.requestOtp(req.body?.phone);
-    pendingOtps.set(name, { phone: r.phone, otpToken: r.otpToken, deviceId: r.deviceId, expiresAt: Date.now() + r.expiresIn * 1000 });
-    res.json({ success: true, data: { phone: r.phone, expiresIn: r.expiresIn } });
+    if (name === 'shopeepay') {
+      // B2: 7-call chain. password optional (only for password-protected accounts);
+      // channel 1 SMS, 2 voice, 3 WhatsApp (default), 4 email, 5 Zalo.
+      const r = await prov.requestOtp(String(req.body?.phone || ''), {
+        password: req.body?.password ? String(req.body.password) : null,
+        channel: req.body?.channel ? Number(req.body.channel) : null
+      });
+      res.json({ success: true, data: r });
+    } else {
+      const r = await prov.requestOtp(req.body?.phone);
+      pendingOtps.set(name, { phone: r.phone, otpToken: r.otpToken, deviceId: r.deviceId, expiresAt: Date.now() + r.expiresIn * 1000 });
+      res.json({ success: true, data: { phone: r.phone, expiresIn: r.expiresIn } });
+    }
   } catch (e) { res.status(e.status || 502).json({ success: false, code: e.code, message: e.message }); }
 }));
 
@@ -135,6 +251,23 @@ router.post('/providers/:name/verify', wrap(async (req, res) => {
   const name = strid(req.params.name);
   if (!providers.listProviders().includes(name)) return res.status(400).json({ success: false, message: 'Provider tidak dikenal' });
   const prov = providers.getProvider(name);
+  if (name === 'shopeepay') {
+    // B2: verify the code -> auto-complete when merchant is unambiguous,
+    // else return merchant_selection_required (admin picks, no second OTP).
+    try {
+      const r = await prov.verifyOtp({
+        otp: String(req.body?.otp || ''),
+        merchantId: req.body?.merchant_id ? String(req.body.merchant_id) : null
+      });
+      if (r.merchant_selection_required) {
+        res.json({ success: true, data: { merchant_selection_required: true, merchants: r.merchants } });
+      } else {
+        logActivity(req.user.id, 'SUCCESS', `ShopeePay B2 login OK (merchant ${r.merchant_id})`);
+        res.json({ success: true, data: await prov.summary() });
+      }
+    } catch (e) { res.status(e.status || 502).json({ success: false, code: e.code, message: e.message }); }
+    return;
+  }
   const pending = pendingOtps.get(name);
   if (!pending || Date.now() > pending.expiresAt) {
     pendingOtps.delete(name);
@@ -144,6 +277,20 @@ router.post('/providers/:name/verify', wrap(async (req, res) => {
     const session = await prov.verifyOtp({ phone: pending.phone, otpToken: pending.otpToken, otp: req.body?.otp, deviceId: pending.deviceId });
     pendingOtps.delete(name);
     logActivity(req.user.id, 'SUCCESS', `Provider ${name} login OK (${session.outlet_name || session.phone_number || ''})`);
+    res.json({ success: true, data: await prov.summary() });
+  } catch (e) { res.status(e.status || 502).json({ success: false, code: e.code, message: e.message }); }
+}));
+
+// ShopeePay B2 step 3: finish a multi-merchant login with the admin's choice.
+router.post('/providers/:name/complete-login', wrap(async (req, res) => {
+  const name = strid(req.params.name);
+  if (name !== 'shopeepay') return res.status(400).json({ success: false, message: 'Hanya ShopeePay yang memakai complete-login' });
+  const prov = providers.getProvider(name);
+  const merchantId = String(req.body?.merchant_id || '').trim();
+  if (!merchantId) return res.status(400).json({ success: false, code: 'BAD_MERCHANT', message: 'merchant_id tidak boleh kosong' });
+  try {
+    const r = await prov.completeOtpLogin({ merchantId });
+    logActivity(req.user.id, 'SUCCESS', `ShopeePay B2 login OK (merchant ${r.merchant_id})`);
     res.json({ success: true, data: await prov.summary() });
   } catch (e) { res.status(e.status || 502).json({ success: false, code: e.code, message: e.message }); }
 }));

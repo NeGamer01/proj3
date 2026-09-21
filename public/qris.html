@@ -6,20 +6,87 @@
 <meta name="theme-color" content="#060a18">
 <title>QRISPay — Bayar</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/qris.css?v=7">
+<link rel="apple-touch-icon" href="/assets/logo.svg">
+<link rel="stylesheet" href="/qris.css?v=14">
 </head>
 <body>
-<div class="qr-card">
-  <h2>Scan & Bayar</h2>
-  <div id="amt" class="amt">…</div>
-  <div id="ref" class="ref"></div>
-  <div class="qr-box"><img id="qrimg" alt="QRIS" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"></div>
-  <div id="status" class="status">⏳ Memuat…</div>
-  <div id="countdown" class="countdown"></div>
-  <a id="dl" class="btn" href="?download=1">Unduh QR</a>
-  <div id="meta" class="meta"></div>
+<div class="qr-page">
+  <main class="checkout" id="checkout">
+
+    <!-- Header -->
+    <header class="checkout__head">
+      <div class="brand">
+        <img src="/assets/logo.svg" alt="QRISPay" class="brand__logo">
+        <span class="brand__name">QRIS<b>Pay</b></span>
+      </div>
+      <span class="secure"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg> Aman &amp; Terenkripsi</span>
+    </header>
+
+    <!-- Body -->
+    <div class="checkout__body">
+      <div class="pay-title">Bayar dengan QRIS</div>
+      <div class="pay-sub" id="merchant">QRISPay Merchant</div>
+
+      <div class="amount-box">
+        <span class="amount-box__label">Total Tagihan</span>
+        <div class="amount-box__row">
+          <span class="amount-box__cur">Rp</span>
+          <span id="amt" class="amount-box__val">…</span>
+          <button id="copy" class="amount-box__copy" title="Salin nominal" hidden>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="qr-wrap">
+        <div class="qr-box" id="qrbox">
+          <div class="qr-skel" id="qrskel">
+            <div class="qr-skel__pulse"></div>
+          </div>
+          <img id="qrimg" alt="QRIS" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" hidden>
+          <div class="qr-scan" id="qrscan" hidden></div>
+          <div class="qr-done" id="qrdone" hidden>
+            <svg viewBox="0 0 52 52" width="64" height="64" fill="none" stroke="#34d399" stroke-width="4" stroke-linecap="round"><circle cx="26" cy="26" r="22" stroke-opacity=".28"/><path class="qr-done__check" d="M16 27l7 7 14-15"/></svg>
+          </div>
+          <div class="qr-dead" id="qrdead" hidden>
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#f87171" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
+          </div>
+        </div>
+        <div class="qr-badge">
+          <img src="/assets/logo.svg" alt="" class="qr-badge__mark">
+          <span>Scan via <b>QRIS</b></span>
+        </div>
+      </div>
+
+      <div id="status" class="status status--wait">
+        <span class="status__dot"></span><span id="statusText">Memuat QR…</span>
+      </div>
+
+      <div class="countdown" id="countdown" hidden>
+        <div class="countdown__bar"><i id="countbar"></i></div>
+        <span id="counttext">Bayar dalam 5:00</span>
+      </div>
+
+      <ol class="steps">
+        <li><b>1.</b> Buka aplikasi e-wallet / m-banking apa pun</li>
+        <li><b>2.</b> Scan QR di atas, pastikan nominal sudah benar</li>
+        <li><b>3.</b> Konfirmasi &amp; masukkan PIN aplikasi</li>
+      </ol>
+
+      <div class="detail" id="detail">
+        <div class="detail__row"><span>ID Transaksi</span><b id="d-ref">-</b></div>
+        <div class="detail__row"><span>Metode</span><b>QRIS</b></div>
+        <div class="detail__row" id="row-tx" hidden><span>Referensi Pembayaran</span><b id="d-tx">-</b></div>
+      </div>
+
+      <a class="btn-ghost" id="dl" hidden role="button">Unduh Kode QR</a>
+    </div>
+
+    <footer class="checkout__foot">
+      Pembayaran diproses otomatis oleh QRISPay · Transaksi Anda dilindungi enkripsi end-to-end
+    </footer>
+  </main>
 </div>
-<script src="/qris.js?v=7"></script>
+<script src="/qris.js?v=14"></script>
 </body>
 </html>
-...

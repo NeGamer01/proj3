@@ -7,7 +7,7 @@
 <title>QRISPay — Admin</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/logo.svg">
-<link rel="stylesheet" href="/assets/app.css?v=7">
+<link rel="stylesheet" href="/assets/app.css?v=17">
 </head>
 <body>
 <div class="layout">
@@ -46,7 +46,7 @@
     </div>
   </main>
 </div>
-<script src="/assets/common.js?v=7"></script>
+<script src="/assets/common.js?v=17"></script>
 <script>
 // Global error trap: tampilkan error JS langsung di layar supaya bisa dilihat user
 window.addEventListener('error', (e) => {
@@ -145,21 +145,65 @@ function renderPlans() {
   (async () => {
     const r = await admin('/plans');
     content.innerHTML = `
-      <div class="panel"><h3>Paket Baru</h3>
+      <div class="panel"><h3 id="pf-title">Paket Baru</h3>
         <form id="np" class="form">
+          <input type="hidden" name="id">
           <div class="row"><label>Nama<input name="name" required></label><label>Harga<input name="price" type="number" min="0" required></label></div>
           <div class="row"><label>Durasi (hari)<input name="duration_days" type="number" min="1" required></label>
-            <label>Tier<select name="tier"><option value="H0">H0 (GoPay)</option><option value="H1">H1 (ShopeePay)</option></select></label></div>
-          <label>Provider (pisah koma)<input name="providers" placeholder="gopay,shopeepay" required></label>
+            <label>Settlement<select name="tier"><option value="H1">H+1 (QRIS)</option><option value="H0">H+0 (QRIS Realtime)</option></select></label></div>
+          <label>Metode pembayaran (pisah koma — gopay,shopeepay)<input name="providers" placeholder="gopay,shopeepay" required></label>
           <label>Deskripsi<input name="description"></label>
-          <button class="btn" type="submit">Simpan</button>
+          <label class="switch"><input type="checkbox" name="active" checked> Aktif (bisa dibeli user)</label>
+          <div class="row"><button class="btn" type="submit">Simpan</button><button type="button" class="btn sec" id="pf-cancel" hidden>Batal</button></div>
         </form><p id="np-msg" class="msg"></p>
       </div>
-      <div class="panel"><h3>Daftar Paket</h3><table><thead><tr><th>ID</th><th>Nama</th><th>Tier</th><th>Provider</th><th>Harga</th><th>Durasi</th><th>Aktif</th></tr></thead><tbody id="pl"></tbody></table></div>
+      <div class="panel"><h3>Daftar Paket</h3><table><thead><tr><th>ID</th><th>Nama</th><th>Settlement</th><th>Metode</th><th>Harga</th><th>Durasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody id="pl"></tbody></table></div>
     `;
-    function fill(rows) { document.getElementById('pl').innerHTML = rows.map(p => `<tr><td>${p.id}</td><td>${esc(p.name)}</td><td>${esc(p.tier)}</td><td>${esc((p.providers||[]).join(', '))}</td><td>${money(p.price)}</td><td>${p.duration_days}h</td><td>${tag(p.active?'active':'EXPIRED')}</td></tr>`).join(''); }
+    const prov = (p) => (p.providers||[]).map(x => x === 'gopay' ? 'QRIS Realtime' : x === 'shopeepay' ? 'QRIS' : esc(x)).join(' + ');
+    function fill(rows) {
+      document.getElementById('pl').innerHTML = rows.map(p => `<tr>
+        <td>${p.id}</td><td>${esc(p.name)} ${(p.providers||[]).includes('gopay') ? '<span class="badge">Prioritas</span>' : ''}</td>
+        <td>${esc(p.tier === 'H0' ? 'H+0' : 'H+1')}</td><td>${prov(p)}</td><td>${money(p.price)}</td><td>${p.duration_days}h</td>
+        <td>${tag(p.active ? 'active' : 'EXPIRED')}</td>
+        <td style="white-space:nowrap">
+          <button class="btn sec sm" data-edit="${p.id}">Edit</button>
+          <button class="btn sec sm" data-tgl="${p.id}" title="${p.active ? 'Nonaktifkan' : 'Aktifkan'}">${p.active ? 'Nonaktifkan' : 'Aktifkan'}</button>
+          <button class="btn danger sm" data-del="${p.id}">Hapus</button>
+        </td></tr>`).join('');
+      document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => startEdit(Number(b.dataset.edit), rows));
+      document.querySelectorAll('[data-tgl]').forEach(b => b.onclick = async () => {
+        const row = rows.find(x => x.id === Number(b.dataset.tgl));
+        const rr = await admin('/plans/' + row.id, { method: 'PUT', body: JSON.stringify({ ...row, active: !row.active }) });
+        if (rr.success) { toast('Status paket diubah', 'ok'); fill((await admin('/plans')).data); } else toast(rr.message || 'Gagal', 'err');
+      });
+      document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+        if (!confirm('Hapus paket ini? Langganan aktif yang sudah ada tidak terpengaruh.')) return;
+        const rr = await admin('/plans/' + b.dataset.del, { method: 'DELETE' });
+        if (rr.success) { toast('Paket dihapus', 'ok'); fill((await admin('/plans')).data); } else toast(rr.message || 'Gagal', 'err');
+      });
+    }
+    const form = document.getElementById('np');
+    function startEdit(id, rows) {
+      const p = rows.find(x => x.id === id); if (!p) return;
+      form.id.value = p.id; form.name.value = p.name; form.price.value = p.price;
+      form.duration_days.value = p.duration_days; form.tier.value = p.tier || 'H1';
+      form.providers.value = (p.providers || []).join(','); form.active.checked = !!p.active;
+      document.getElementById('pf-title').textContent = 'Edit Paket #' + p.id;
+      document.getElementById('pf-cancel').hidden = false;
+      form.name.focus();
+    }
+    document.getElementById('pf-cancel').onclick = () => { form.reset(); form.id.value = ''; document.getElementById('pf-title').textContent = 'Paket Baru'; document.getElementById('pf-cancel').hidden = true; };
     fill(r.data||[]);
-    document.getElementById('np').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const rr = await admin('/plans', { method:'POST', body: JSON.stringify({ ...f, price: Number(f.price), duration_days: Number(f.duration_days), providers: f.providers.split(',').map(s=>s.trim()).filter(Boolean), active: true }) }); const msg = document.getElementById('np-msg'); if (rr.success) { toast('Paket tersimpan', 'ok'); fill((await admin('/plans')).data); } else { msg.textContent = rr.message||'Gagal'; msg.className='msg err'; } };
+    form.onsubmit = async e => {
+      e.preventDefault(); const f = Object.fromEntries(new FormData(form));
+      const body = { ...f, id: f.id || undefined, price: Number(f.price), duration_days: Number(f.duration_days), providers: String(f.providers).split(',').map(s=>s.trim()).filter(Boolean), active: !!f.active };
+      const method = body.id ? 'PUT' : 'POST';
+      const url = body.id ? '/plans/' + body.id : '/plans';
+      const rr = await admin(url, { method, body: JSON.stringify(body) });
+      const msg = document.getElementById('np-msg');
+      if (rr.success) { toast('Paket tersimpan', 'ok'); form.reset(); form.id.value=''; document.getElementById('pf-title').textContent='Paket Baru'; document.getElementById('pf-cancel').hidden = true; fill((await admin('/plans')).data); }
+      else { msg.textContent = rr.message || 'Gagal'; msg.className = 'msg err'; }
+    };
   })();
 }
 
@@ -170,7 +214,13 @@ function renderProviders() {
     const rows = r.data||[];
     document.getElementById('pv').innerHTML = rows.map(p => `
       <div class="panel">
-        <h3>${esc(p.name)} ${tag(p.summary?.status || (p.implemented?'active':'unconfigured'))}</h3>
+        <h3>${esc(p.name)} ${tag(p.health?.state === 'down' ? 'DOWN' : (p.connected ? 'UP' : 'unconfigured'))}</h3>
+        ${p.health?.state === 'down' ? `<p class="msg err">⚠ Gangguan${p.health.reason ? ' — ' + esc(p.health.reason) : ''}${p.health.downSince ? ' sejak ' + new Date(p.health.downSince).toLocaleString('id-ID') : ''}</p>` : ''}
+        <div class="row" style="margin:8px 0">
+          <button class="btn sm" data-health="${esc(p.name)}" data-state="down">Tandai Gangguan</button>
+          <button class="btn sm" data-health="${esc(p.name)}" data-state="up">Tandai Sembuh</button>
+          <button class="btn sm" data-health="${esc(p.name)}" data-state="auto">Auto</button>
+        </div>
         <div class="grid">
           <div class="card"><div class="lbl">Merchant</div><div class="val" style="font-size:14px">${esc(p.summary?.merchant_id || '-')}</div></div>
           <div class="card"><div class="lbl">Outlet</div><div class="val" style="font-size:14px">${esc(p.summary?.outlet_name || '-')}</div></div>
@@ -187,25 +237,111 @@ function renderProviders() {
         ${p.implemented ? `
         <div class="panel">
           <h4>Login OTP (${esc(p.name)})</h4>
+          ${p.name === 'shopeepay' ? `
+          <details ${p.summary?.device_report ? '' : 'open'}>
+            <summary>Sidik Jari Perangkat (wajib sekali)</summary>
+            <p class="msg ${p.summary?.device_report ? 'ok' : 'err'}">${p.summary?.device_report ? '✓ Terpasang (' + p.summary.device_report + ')' : 'Belum terpasang — OTP tidak akan terkirim tanpa ini'}</p>
+            <form id="dr-${esc(p.name)}" class="form">
+              <div class="row"><label>Device-risk blob <textarea name="blob" rows="3" placeholder="POST .../v2/shpsec/web/report request payload (string panjang)"></textarea></label></div>
+              <button class="btn sm" type="submit">Pasang Blob</button>
+            </form>
+            <p class="msg">Cara ambil di PC: buka <a href="https://partner.shopee.co.id" target="_blank">partner.shopee.co.id</a> (mode samar) → F12 → tab <b>Network</b> → filter <b>report</b> → reload → klik <b>POST .../v2/shpsec/web/report</b> → tab <b>Payload</b> → copy semuanya (string panjang, bukan JSON).</p>
+          </details>` : ''}
           <form id="ot-${esc(p.name)}" class="form">
             <div class="row"><label>Nomor telepon (62…)<input name="phone" placeholder="62812…" required></label></div>
+            ${p.name === 'shopeepay' ? `<div class="row"><label>Password (opsional)<input name="password" type="password" placeholder="kosongkan jika tidak ada" autocomplete="off"></label>
+            <label>Channel<select name="channel"><option value="">Otomatis (default WhatsApp)</option><option value="1">SMS</option><option value="2">Voice</option><option value="3">WhatsApp</option><option value="4">Email</option></select></label></div>` : ''}
             <button class="btn" type="submit">Minta OTP</button>
           </form>
           <p id="ot-msg-${esc(p.name)}" class="msg"></p>
           <form id="vf-${esc(p.name)}" class="form" style="display:none">
-            <div class="row"><label>Kode OTP (dikirim via SMS)<input name="otp" inputmode="numeric" placeholder="123456" required></label></div>
+            <div class="row"><label>Kode OTP (dikirim via SMS${p.name === 'shopeepay' ? '/WhatsApp' : ''})<input name="otp" inputmode="numeric" placeholder="123456" required></label></div>
             <button class="btn sec" type="submit">Verifikasi</button>
           </form>
-        </div>` : '<p class="muted">Provider ini belum diimplementasi (Phase 2).</p>'}
+          <div id="mc-${esc(p.name)}" class="form" style="display:none">
+            <p class="msg ok">Pilih merchant untuk menyelesaikan login (tanpa OTP kedua):</p>
+            <div class="row" id="mc-list-${esc(p.name)}"></div>
+          </div>
+        </div>
+        ${p.name === 'shopeepay' ? `
+        <div class="panel">
+          <h4>Token Manual (QRIS H+1)</h4>
+          <form id="tk-${esc(p.name)}" class="form">
+            <div class="row"><label>Token B:…<input name="token" placeholder="B:..." value="${esc(p.summary?.status === 'active' ? '****terpasang' : '')}" autocomplete="off"></label></div>
+            <button class="btn" type="submit">Pasang Token</button>
+          </form>
+          <p class="hint">Cara ambil: login <b>partner.shopee.co.id</b> → DevTools (F12) → tab Network → buka halaman riwayat transaksi → cari request <b>get-transaction-list</b> → Request Payload → <b>data.metadata.token</b> → copy (dimulai dari <b>B:</b>).</p>
+          <form id="st-${esc(p.name)}" class="form row" style="display:${p.summary?.status === 'active' ? '' : 'none'}">
+            <select name="store_id" id="st-sel-${esc(p.name)}"></select>
+            <button class="btn sec" type="submit">Pilih Store</button>
+          </form>
+        </div>` : ''}` : '<p class="muted">Provider ini belum diimplementasi (Phase 2).</p>'}
       </div>
     `).join('');
     rows.forEach(p => {
       const nm = p.name;
       const sq = document.getElementById('sq-'+nm); if (sq) sq.onsubmit = async e => { e.preventDefault(); const v = new FormData(e.target).get('qris_static'); const rr = await admin('/providers/'+nm+'/static-qris', { method:'PUT', body: JSON.stringify({ qris_static: v.startsWith('****')?'':v }) }); if (rr.success) toast('QRIS statis dipasang', 'ok'); else toast(rr.message||'Gagal', 'err'); render('providers'); };
+      // manual health override buttons
+      document.querySelectorAll(`[data-health="${nm}"]`).forEach((b) => {
+        b.onclick = async () => {
+          const rr = await admin('/providers/'+nm+'/health', { method:'POST', body: JSON.stringify({ state: b.dataset.state }) });
+          if (rr.success) { toast(`Status ${nm} = ${b.dataset.state}`, 'ok'); render('providers'); }
+          else toast(rr.message || 'Gagal', 'err');
+        };
+      });
+      // device-risk blob handler (shopeepay only)
+      const dr = document.getElementById('dr-'+nm); if (dr) {
+        dr.onsubmit = async e => { e.preventDefault(); const fd = new FormData(e.target);
+          const rr = await admin('/providers/'+nm+'/device-report', { method:'POST', body: JSON.stringify({ blob: fd.get('blob') }) });
+          if (rr.success) { toast('Blob terpasang (' + rr.data.length + ' bytes)', 'ok'); render('providers'); }
+          else toast(rr.message||'Gagal', 'err');
+        };
+      }
       const ot = document.getElementById('ot-'+nm); if (!ot) return;
-      ot.onsubmit = async e => { e.preventDefault(); const phone = new FormData(e.target).get('phone'); const rr = await admin('/providers/'+nm+'/otp', { method:'POST', body: JSON.stringify({ phone }) }); const msg = document.getElementById('ot-msg-'+nm); if (rr.success) { msg.textContent='Kode OTP dikirim ke ' + (rr.data?.phone || phone) + '. Cek SMS Anda.'; msg.className='msg ok'; document.getElementById('vf-'+nm).style.display=''; document.getElementById('ot-'+nm).querySelector('[name=phone]').disabled = true; } else { msg.textContent = rr.message||'Gagal'; msg.className='msg err'; } };
+      ot.onsubmit = async e => { e.preventDefault(); const fd = new FormData(e.target); const phone = fd.get('phone');
+        const body = { phone };
+        if (fd.get('password') !== null && String(fd.get('password')) !== '') body.password = fd.get('password');
+        if (fd.get('channel')) body.channel = Number(fd.get('channel'));
+        const rr = await admin('/providers/'+nm+'/otp', { method:'POST', body: JSON.stringify(body) });
+        const msg = document.getElementById('ot-msg-'+nm);
+        if (rr.success) {
+          const ch = {1:'SMS',2:'Voice',3:'WhatsApp',4:'Email',5:'Zalo'}[rr.data?.channel] || 'WhatsApp';
+          msg.textContent = 'Kode OTP dikirim via ' + ch + ' ke ' + (rr.data?.phone || phone) + '.';
+          msg.className = 'msg ok';
+          document.getElementById('vf-'+nm).style.display=''; ot.querySelector('[name=phone]').disabled = true;
+        } else { msg.textContent = rr.message||'Gagal'; msg.className='msg err'; }
+      };
       const vf = document.getElementById('vf-'+nm); if (!vf) return;
-      vf.onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); const rr = await admin('/providers/'+nm+'/verify', { method:'POST', body: JSON.stringify({ otp: f.otp }) }); if (rr.success) { toast('Login OK, provider aktif', 'ok'); render('providers'); } else toast(rr.message||'Gagal', 'err'); };
+      vf.onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+        const rr = await admin('/providers/'+nm+'/verify', { method:'POST', body: JSON.stringify({ otp: f.otp }) });
+        if (rr.success) {
+          if (rr.data?.merchant_selection_required) {
+            // multi-merchant: render picker (no second OTP needed)
+            const list = document.getElementById('mc-list-'+nm);
+            list.innerHTML = (rr.data.merchants||[]).map(m => `<button type="button" class="btn sec sm" data-mc="${esc(m.id)}">${esc(m.name||m.id)} <small>(${esc(m.id)})</small></button>`).join('');
+            document.getElementById('mc-'+nm).style.display='';
+            list.querySelectorAll('[data-mc]').forEach(b => b.onclick = async () => {
+              const r2 = await admin('/providers/'+nm+'/complete-login', { method:'POST', body: JSON.stringify({ merchant_id: b.dataset.mc }) });
+              if (r2.success) { toast('Login OK, provider aktif', 'ok'); render('providers'); } else toast(r2.message||'Gagal', 'err');
+            });
+          } else { toast('Login OK, provider aktif', 'ok'); render('providers'); }
+        } else toast(rr.message||'Gagal', 'err');
+      };
+      // ShopeePay B1: paste manual token + store picker
+      const tk = document.getElementById('tk-'+nm); if (!tk) return;
+      tk.onsubmit = async e => { e.preventDefault(); const v = new FormData(e.target).get('token'); if (!v || v.startsWith('****')) { toast('Isi token dulu', 'err'); return; } const rr = await admin('/providers/'+nm+'/token', { method:'POST', body: JSON.stringify({ token: v }) }); if (rr.success) { toast('Token dipasang, ' + (rr.data?.stores?.length||0) + ' store ditemukan', 'ok'); render('providers'); } else toast(rr.message||'Gagal', 'err'); };
+      const st = document.getElementById('st-'+nm); if (!st) return;
+      (async () => {
+        try {
+          const rr = await admin('/providers/'+nm+'/stores');
+          const sel = document.getElementById('st-sel-'+nm);
+          if (rr.success && sel) {
+            const cur = rr.data?.current_store_id || null;
+            sel.innerHTML = (rr.data?.stores||[]).map(s => `<option value="${esc(s.id)}" ${String(s.id)===String(cur||'')?'selected':''}>${esc(s.name || s.id)} (id ${esc(s.id)})</option>`).join('');
+          }
+        } catch {}
+      })();
+      st.onsubmit = async e => { e.preventDefault(); const v = new FormData(e.target).get('store_id'); const rr = await admin('/providers/'+nm+'/store', { method:'POST', body: JSON.stringify({ store_id: v }) }); if (rr.success) { toast('Store dipilih', 'ok'); render('providers'); } else toast(rr.message||'Gagal', 'err'); };
     });
   })();
 }

@@ -6,6 +6,7 @@ const db = require('../db');
 const { config } = require('../config');
 const { generateDynamicQRIS, parseEMVCoTags } = require('../utils/qris');
 const { calculateCRC16 } = require('../utils/crc16');
+const { providerLabel } = require('../utils/displayNames');
 const { logActivity } = require('./logs');
 
 class InvoiceError extends Error {
@@ -52,12 +53,12 @@ async function setStatus(id, status, transaction = null) {
 
 function publicView(rec) {
   return {
-    qris_id: rec.id, trx_id: rec.trx_id, provider: rec.provider, reference: rec.reference,
+    qris_id: rec.id, trx_id: rec.trx_id, provider: rec.provider, provider_label: providerLabel(rec.provider), reference: rec.reference,
     attributes: rec.attributes, callback_url: rec.callback_url,
     base_amount: rec.base_amount, unique_code: rec.unique_code, amount: rec.total_amount,
     qris_code: rec.data,
-    qris_url: `${config.publicUrl || ''}/qr/${rec.id}`,
-    qr_image_url: `${config.publicUrl || ''}/qr/${rec.id}?format=raw`,
+    qris_url: `/qr/${rec.id}`,
+    qr_image_url: `/qr/${rec.id}?format=raw`,
     status: rec.status, created_at: rec.created_at.toISOString(), expires_at: rec.expires_at.toISOString(), transaction: rec.transaction
   };
 }

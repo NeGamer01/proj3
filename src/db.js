@@ -242,6 +242,14 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS app_settings (
     \`key\` VARCHAR(64) PRIMARY KEY,
     value TEXT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+  // Per-user dashboard preferences (provider toggle: shopeepay <-> gopay).
+  `CREATE TABLE IF NOT EXISTS user_prefs (
+    user_id INT PRIMARY KEY,
+    provider_choice ENUM('shopeepay','gopay') NOT NULL DEFAULT 'shopeepay',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_prefs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 ];
 

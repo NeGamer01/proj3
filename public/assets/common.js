@@ -25,6 +25,9 @@ async function api(path, opts = {}) {
 }
 function money(n) { return 'Rp ' + Number(n || 0).toLocaleString('id-ID'); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+// Public channel names: internal gopay/shopeepay are never shown to end users.
+const PROVIDER_LABELS = { shopeepay: 'QRIS', gopay: 'QRIS Realtime' };
+function providerLabel(name) { return PROVIDER_LABELS[String(name ?? '').toLowerCase()] || String(name ?? ''); }
 function tag(status) {
   const map = { PAID: 'ok', active: 'ok', processed: 'ok', PENDING: 'warn', requested: 'warn', EXPIRED: 'err', rejected: 'err', blocked: 'err', cancelled: 'mut', H0: 'warn' };
   const cls = map[status] || 'mut';

@@ -9,6 +9,7 @@ const payments = require('../services/payments');
 const providers = require('../providers');
 const { config } = require('../config');
 const { logger } = require('../utils/logger');
+const health = require('../services/providerHealth');
 
 const pollers = new Map(); // provider name -> { timer, running }
 
@@ -25,6 +26,7 @@ async function tick(providerName) {
 
     const startMs = Date.now() - config.mutasiLookbackMinutes * 60 * 1000;
     const mutations = await provider.fetchRecentMutasi({ startTimeMs: startMs });
+    health.recordSuccess(providerName); // mutasi fetch worked -> provider is healthy
     const pending = await invoices.listPendingForProvider(providerName);
     const matches = await matching.matchMutations(providerName, mutations, pending);
 
@@ -43,6 +45,7 @@ async function tick(providerName) {
     if (matches.length) logger.info(`[Poller:${providerName}] settled ${matches.length} payment(s)`);
   } catch (e) {
     logger.error(`[Poller:${providerName}] tick failed: ${e.message}`);
+    health.recordFailure(providerName, 'poller: ' + e.message);
   } finally {
     state.running = false;
   }

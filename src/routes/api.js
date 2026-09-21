@@ -9,7 +9,12 @@ const webhooks = require('../services/webhooks');
 const ledger = require('../services/ledger');
 const withdrawals = require('../services/withdrawals');
 const subs = require('../services/subscriptions');
+const prefs = require('../services/preferences');
 const providers = require('../providers');
+const channelRouter = require('../services/channelRouter');
+const router_ = channelRouter;
+
+const { providerLabel, CHANNEL_ALIASES, resolveChannelAlias, settlementInfo } = require('../utils/displayNames');
 
 const router = Router();
 const wrap = (fn) => (req, res) => fn(req, res).catch((e) => {
@@ -19,31 +24,18 @@ const pid = (p) => (Array.isArray(p) ? p[0] : p) || '';
 
 router.get('/api/v1/healthz', (_req, res) => res.json({ status: 'healthy', service: 'qrispay', time: new Date().toISOString() }));
 
-// Create QRIS (with provider + tier gating)
+// Create QRIS. Provider choice is internal — clients may request a settlement
+// speed ("qris" / "realtime") but never a specific provider; routing picks a
+// healthy provider automatically. Settlement speed follows the subscription.
 router.post('/api/v1/qris', requireApiKey, wrap(async (req, res) => {
   const b = req.body || {};
-  const requestedProvider = (b.provider ? String(b.provider) : '').toLowerCase() || null;
-  // Resolve provider: explicit, or auto-pick by tier (first allowed + implemented).
-  let provider = requestedProvider;
-  if (!provider) {
-    provider = req.apiUser.allowed_providers.find((p) => providers.isImplemented(p)) || null;
-    if (!provider) {
-      return res.status(503).json({ success: false, code: 'PROVIDER_UNAVAILABLE', message: 'Belum ada provider yang aktif. Hubungi admin.' });
-    }
-  }
-  // Tier gating.
-  if (!req.apiUser.allowed_providers.includes(provider)) {
-    return res.status(403).json({ success: false, code: 'PROVIDER_NOT_PERMITTED', message: `Provider ${provider} tidak tersedia di paket Anda. Upgrade langganan.` });
-  }
-  if (!providers.isImplemented(provider)) {
-    return res.status(503).json({ success: false, code: 'PROVIDER_UNAVAILABLE', message: `Provider ${provider} belum tersedia.` });
-  }
-  // Check provider is connected (has active session + static QR).
-  const prov = providers.getProvider(provider);
-  const sess = await prov.getActiveSession();
-  if (!sess) {
-    return res.status(503).json({ success: false, code: 'PROVIDER_UNAVAILABLE', message: `Akun ${provider} operator belum terhubung.` });
-  }
+  const wantRealtime = resolveChannelAlias(b.provider ? String(b.provider) : '') === 'gopay'
+    || String(b.speed || '').toLowerCase() === 'realtime';
+
+  const { provider } = await router_.pickProvider({
+    wantRealtime,
+    allowed: req.apiUser.allowed_providers
+  });
   const data = await invoices.createInvoice(req.apiUser.user_id, {
     amount: b.amount ?? req.query.amount,
     provider,
@@ -51,16 +43,34 @@ router.post('/api/v1/qris', requireApiKey, wrap(async (req, res) => {
     attributes: b.attributes,
     callback_url: b.callback_url ?? req.query.callback_url
   });
-  res.status(201).json({ success: true, data });
+  // Public view: hide the provider entirely; expose only settlement speed.
+  const { settlementInfo } = require('../utils/displayNames');
+  const tier = req.apiUser.tier || (req.apiUser.allowed_providers?.includes('gopay') ? 'H0' : 'H1');
+  const publicData = { ...data };
+  delete publicData.provider; delete publicData.provider_label;
+  publicData.settlement = settlementInfo(tier);
+  publicData.channel = publicData.settlement.speed === 'H+0' ? 'realtime' : 'qris';
+  res.status(201).json({ success: true, data: publicData });
 }));
 
 // Account info for the key owner (subscription + allowed providers + balance)
 router.get('/api/v1/me', requireApiKey, wrap(async (req, res) => {
-  const [sub, bal] = await Promise.all([
+  const [sub, bal, choice] = await Promise.all([
     subs.subscriptionStatus(req.apiUser.user_id, req.apiUser.role),
-    ledger.getBalance(req.apiUser.user_id)
+    ledger.getBalance(req.apiUser.user_id),
+    prefs.getProviderChoice(req.apiUser.user_id)
   ]);
-  res.json({ success: true, data: { subscription: sub, allowed_providers: req.apiUser.allowed_providers, balance: bal } });
+  res.json({
+    success: true,
+    data: {
+      subscription: sub,
+      allowed_providers: req.apiUser.allowed_providers,
+      allowed_channels: req.apiUser.allowed_providers.map((p) => ({ provider: p, label: providerLabel(p) })),
+      provider_choice: choice,
+      provider_label: providerLabel(choice),
+      balance: bal
+    }
+  });
 }));
 
 router.get('/api/v1/balance', requireApiKey, wrap(async (req, res) => {
@@ -105,17 +115,30 @@ router.delete('/api/v1/webhooks/:id', requireApiKey, wrap(async (req, res) => {
 }));
 
 // ── Public (no key): status polling + payment page. IDs are unguessable. ──
+// Strip the internal provider name from anything a client sees.
+function publicView(rec, data = {}) {
+  const v = { ...data };
+  delete v.provider; delete v.provider_label;
+  const tier = rec.tier || null;
+  if (tier) v.settlement = settlementInfo(tier);
+  return v;
+}
+
 router.get('/api/v1/qris/:id/status', wrap(async (req, res) => {
   const data = await qris.checkStatus(pid(req.params.id));
-  res.status(data.status === 'EXPIRED' ? 410 : 200).json({ success: data.status !== 'EXPIRED', ...data });
+  const v = { ...data };
+  delete v.provider; delete v.provider_label;
+  if (v.transaction) { const t = { ...v.transaction }; delete t.provider; v.transaction = t; }
+  res.status(data.status === 'EXPIRED' ? 410 : 200).json({ success: data.status !== 'EXPIRED', ...v });
 }));
 
 router.get('/api/v1/qris/:id', wrap(async (req, res) => {
   const rec = await invoices.getRecord(pid(req.params.id));
   if (!rec) return res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Invoice tidak ditemukan' });
   const v = invoices.publicView(rec);
+  delete v.provider; delete v.provider_label;
   res.json({ success: true, data: { ...v, formatted_amount: new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(rec.total_amount),
-    qr_image_url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(rec.data)}`,
+    qr_image_url: `/qr/${rec.id}?format=raw`,
     expires_at: rec.expires_at.getTime(), duration_ms: rec.expires_at.getTime() - rec.created_at.getTime() } });
 }));
 
@@ -125,6 +148,15 @@ router.get('/qr/:id', wrap(async (req, res) => {
   const expired = Date.now() > rec.expires_at.getTime() && rec.status !== 'PAID';
   if (req.query.format === 'raw' || req.query.raw === '1') {
     if (expired) return res.status(410).send('QRIS Expired');
+    // Proxy the QR image so the browser never depends on a third-party host
+    // (mobile networks often block api.qrserver.com, which made QR blank).
+    try {
+      const r = await fetch(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(rec.data)}`);
+      if (r.ok) {
+        res.set({ 'Content-Type': r.headers.get('content-type') || 'image/png', 'Cache-Control': 'private, no-store' });
+        return res.send(Buffer.from(await r.arrayBuffer()));
+      }
+    } catch (e) { /* fall through to redirect */ }
     return res.redirect(302, `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(rec.data)}`);
   }
   if (req.query.download === '1') {
