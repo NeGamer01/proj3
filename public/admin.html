@@ -28,6 +28,7 @@
       <a href="#qris" class="nav" data-view="qris"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M14 3h3a1 1 0 0 1 1 1v3M3 14v-3a1 1 0 0 1 1-1h3"/></svg>Invoice</a>
       <a href="#withdrawals" class="nav" data-view="withdrawals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h19"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/></svg>Withdraw</a>
       <a href="#unmatched" class="nav" data-view="unmatched"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l9 16H3z"/><path d="M12 9v5M12 17h.01"/></svg>Unmatched</a>
+      <a href="#holds" class="nav" data-view="holds"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Hold H+1</a>
       <a href="#logs" class="nav" data-view="logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 3h11l4 4v14H5z"/><path d="M9 12h7M9 16h7M9 8h4"/></svg>Logs</a>
       <div class="nav-group-label">Bantuan</div>
       <a href="/app"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg>User</a>
@@ -55,7 +56,7 @@ window.addEventListener('error', (e) => {
 });
 const content = document.getElementById('content');
 const title = document.getElementById('view-title');
-const TITLES = { overview:'Overview', users:'Pengguna', plans:'Paket Langganan', providers:'Provider & OTP', orders:'Order', qris:'Invoice', withdrawals:'Withdraw', unmatched:'Unmatched', logs:'Logs' };
+const TITLES = { overview:'Overview', users:'Pengguna', plans:'Paket Langganan', providers:'Provider & OTP', orders:'Order', qris:'Invoice', withdrawals:'Withdraw', unmatched:'Unmatched', holds:'Hold H+1', logs:'Logs' };
 
 document.getElementById('logout').onclick = async (e) => { e.preventDefault(); await api('/app/api/auth/logout', { method: 'POST' }); location.href = '/'; };
 document.querySelectorAll('.nav').forEach(a => a.onclick = (e) => { e.preventDefault(); const v = a.dataset.view; location.hash = v; render(v); });
@@ -78,7 +79,7 @@ async function render(view) {
   if (!ov) return; // bounced to /login
   document.getElementById('whoami').innerHTML = `<span class="dot"></span> ${esc(ov.user?.email || 'admin')}`;
   content.innerHTML = `<p class="muted">Memuat ${TITLES[view] || view}…</p>`;
-  const fn = ({ overview: renderOverview, users: renderUsers, plans: renderPlans, providers: renderProviders, orders: renderOrders, qris: renderQris, withdrawals: renderWithdrawals, unmatched: renderUnmatched, logs: renderLogs })[view];
+  const fn = ({ overview: renderOverview, users: renderUsers, plans: renderPlans, providers: renderProviders, orders: renderOrders, qris: renderQris, withdrawals: renderWithdrawals, unmatched: renderUnmatched, holds: renderHolds, logs: renderLogs })[view];
   if (!fn) { content.innerHTML = `<p class="muted">Menu tidak dikenal: ${esc(view)}</p>`; return; }
   try { fn(ov); } catch (e) { renderError(e.message); }
 }
@@ -376,6 +377,29 @@ function renderUnmatched() {
     const r = await admin('/unmatched');
     content.innerHTML = `<div class="panel"><h3>Pembayaran Tidak Ter-cook</h3><p class="hint">Pembayaran masuk yang tidak ada invoice cocok (lewat grace window). Resolve manual ke invoice yang dimaksud, atau biarkan untuk rekonsiliasi.</p><div class="table-wrap"><table><thead><tr><th>ID</th><th>Provider</th><th>Amount</th><th>TxID</th><th>Waktu</th><th></th></tr></thead><tbody>${(r.data||[]).map(u=>`<tr><td>${u.id}</td><td>${esc(u.provider)}</td><td>${money(u.amount_idr)}</td><td class="mono">${esc(u.tx_id)}</td><td class="muted">${new Date(u.found_at+'Z').toLocaleString('id-ID')}</td><td><button class="btn sec sm" data-res="${u.id}">Resolve</button></td></tr>`).join('')}</tbody></table></div></div>`;
     document.querySelectorAll('[data-res]').forEach(b => b.onclick = async () => { const qid = prompt('qris_id invoice yang dituju (kosongkan = buang):'); await admin('/unmatched/'+b.dataset.res+'/resolve', { method:'POST', body: JSON.stringify({ qris_id: qid || null }) }); toast('Unmatched di-resolve', 'ok'); render('unmatched'); });
+  })();
+}
+
+function renderHolds() {
+  (async () => {
+    const r = await admin('/holds');
+    const rows = r.data || [];
+    const total = rows.reduce((s, h) => s + Number(h.amount || 0), 0);
+    content.innerHTML = `<div class="panel"><h3>Hold Penyelesaian H+1</h3><p class="hint">Saldo dari pembayaran QRIS (H+1) yang masih ditahan. Dirilis otomatis tiap hari jam <b>17:00 WIB</b> (semua hold, tanpa syarat umur). Tombol di bawah untuk rilis manual per invoice, atau lepas semuanya sekarang untuk keadaan darurat.</p>
+      <div class="grid" style="margin-bottom:12px"><div class="card"><div class="lbl">Total Hold</div><div class="val">${money(total)}</div></div><div class="card"><div class="lbl">Jumlah Invoice</div><div class="val">${rows.length}</div></div><div class="card"><button class="btn sec" id="release-all" ${rows.length ? '' : 'disabled'}>Lepas Semua Sekarang</button></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>User</th><th>Nominal</th><th>Dibuat</th><th></th></tr></thead><tbody>${rows.length ? rows.map(h => `<tr><td class="mono">${esc(h.invoice_id)}</td><td>${esc(h.email)}</td><td>${money(h.amount)}</td><td class="muted">${new Date(String(h.created_at).replace(' ', 'T') + 'Z').toLocaleString('id-ID')}</td><td><button class="btn sec sm" data-rel="${esc(h.invoice_id)}">Rilis sekarang</button></td></tr>`).join('') : '<tr><td colspan="5" class="empty">Tidak ada hold aktif</td></tr>'}</tbody></table></div></div>`;
+    document.querySelectorAll('[data-rel]').forEach(b => b.onclick = async () => {
+      const rr = await admin('/holds/' + b.dataset.rel + '/release', { method: 'POST' });
+      if (rr.success) { toast(rr.data?.message || 'Hold dirilis', 'ok'); render('holds'); }
+      else toast(rr.message || 'Gagal melepas hold', 'err');
+    });
+    const ra = document.getElementById('release-all');
+    if (ra) ra.onclick = async () => {
+      if (!confirm('Lepas SEMUA hold sekarang? Ini mengabaikan umur H+1 — pembayaran baru juga akan cair.')) return;
+      const rr = await admin('/holds/release-all', { method: 'POST' });
+      if (rr.success) { toast(`${rr.data.released_count} hold dilepas (Rp ${rr.data.total_amount})`, 'ok'); render('holds'); }
+      else toast(rr.message || 'Gagal', 'err');
+    };
   })();
 }
 

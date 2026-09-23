@@ -132,7 +132,7 @@ function renderBalance(d) {
   content.innerHTML = `
     <div class="grid">
       <div class="card"><div class="lbl">Saldo</div><div class="val">${money(d.balance.balance)}</div></div>
-      <div class="card"><div class="lbl">Ditahan (Held)</div><div class="val">${money(d.balance.held)}</div></div>
+      <div class="card"><div class="lbl">Ditahan (Held)</div><div class="val">${money(d.balance.held)}</div>${d.balance.pending_settlement ? `<div class="sub">Penyelesaian H+1 — dirilis jam 17:00 WIB tiap hari</div>` : ''}</div>
       <div class="card accent"><div class="lbl">Tersedia</div><div class="val">${money(d.balance.available)}</div></div>
     </div>
     <div class="panel">
@@ -164,7 +164,7 @@ function renderBalance(d) {
   (async () => {
     const [wd, lg] = await Promise.all([api('/app/api/withdrawals'), api('/app/api/ledger')]);
     document.getElementById('wd-list').innerHTML = (wd.data || []).length ? `<div class="table-wrap"><table><thead><tr><th>ID</th><th>Nominal</th><th>Status</th><th>Waktu</th><th></th></tr></thead><tbody>${(wd.data||[]).map(w => `<tr><td class="mono">${esc(w.id)}</td><td>${money(w.amount)}</td><td>${tag(w.status)}</td><td class="muted">${new Date(w.created_at).toLocaleString('id-ID')}</td>${w.status === 'requested' ? `<td><button class="btn danger sm" data-cancel="${esc(w.id)}">Batal</button></td>` : '<td></td>'}</tr>`).join('')}</tbody></table></div>` : '<p class="empty">Belum ada withdraw</p>';
-    document.getElementById('ldg-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Waktu</th><th>Tipe</th><th>Nominal</th><th>Saldo setelah</th></tr></thead><tbody>${(lg.data || []).map(e => `<tr><td class="muted">${new Date(e.created_at).toLocaleString('id-ID')}</td><td>${esc(e.type)}</td><td>${money(e.amount)}</td><td>${money(e.balance_after)}</td></tr>`).join('')}</tbody></table></div>`;
+    document.getElementById('ldg-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Waktu</th><th>Tipe</th><th>Nominal</th><th>Saldo setelah</th></tr></thead><tbody>${(lg.data || []).map(e => `<tr><td class="muted">${new Date(e.created_at).toLocaleString('id-ID')}</td><td>${esc(e.type)}${e.ref_type === 'hold_release' ? ' (H+1 cair)' : ''}</td><td>${money(e.amount)}</td><td>${money(e.balance_after)}</td></tr>`).join('')}</tbody></table></div>`;
     document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => { await api('/app/api/withdrawals/' + b.dataset.cancel + '/cancel', { method: 'POST' }); toast('Withdraw dibatalkan', 'ok'); render('balance'); });
   })();
 }

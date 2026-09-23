@@ -2,6 +2,7 @@
 // Dashboard API for logged-in clients (cookie session). Mounted at /app/api.
 const { Router } = require('express');
 const { config } = require('../config');
+const db = require('../db');
 const { requireUser, setSessionCookie, clearSessionCookie } = require('../middlewares/auth');
 const users = require('../services/users');
 const invoices = require('../services/invoices');
@@ -90,7 +91,21 @@ router.get('/overview', wrap(async (req, res) => {
 }));
 
 // ── balance / ledger / withdrawals ──
-router.get('/balance', wrap(async (req, res) => res.json({ success: true, data: await ledger.getBalance(req.user.id) })));
+router.get('/balance', wrap(async (req, res) => {
+  const [bal, holds] = await Promise.all([
+    ledger.getBalance(req.user.id),
+    ledger.totalHeldForUser(req.user.id)
+  ]);
+  if (holds) {
+    const rows = await db.query("SELECT release_at FROM settlement_holds WHERE user_id = ? AND released = 0 ORDER BY release_at ASC LIMIT 1", [req.user.id]);
+    bal.next_release_at = rows[0] ? new Date(String(rows[0].release_at) + 'Z').toISOString() : null;
+    bal.pending_settlement = Number(holds);
+  } else {
+    bal.next_release_at = null;
+    bal.pending_settlement = 0;
+  }
+  res.json({ success: true, data: bal });
+}));
 router.get('/ledger', wrap(async (req, res) => res.json({ success: true, data: await ledger.listEntries(req.user.id, { limit: req.query.limit || 50 }) })));
 router.post('/withdraw', wrap(async (req, res) => {
   const w = await withdrawals.request(req.user.id, { amount: req.body?.amount, bank_detail: req.body?.bank_detail, note: req.body?.note });

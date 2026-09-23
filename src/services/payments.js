@@ -15,6 +15,28 @@ class PaymentError extends Error {
   constructor(message, status = 400, code = 'BAD_REQUEST') { super(message); this.status = status; this.code = code; }
 }
 
+/** H+1 hold duration in hours (a paid H1 settlement becomes withdrawable after this). */
+const H1_HOLD_HOURS = 24;
+
+/**
+ * Is this invoice's settlement H+1 (must be held)? Settlement speed follows the
+ * user's tier at the time of settlement, not the provider that carried it:
+ * an unsubscribed user always gets H+1 even when the QR was drawn from gopay.
+ */
+async function isInvoiceH1(rec) {
+  // The invoice's own provider is the strongest signal: it was routed by the
+  // user's tier at creation time (channelRouter.pickProvider only hands out
+  // gopay to realtime-entitled users).
+  if (rec.provider === 'gopay') return false;
+  // shopeepay is H+1 for everyone, including admins (the operator settles it
+  // next business day regardless).
+  if (rec.provider === 'shopeepay') return true;
+  // Unknown / future providers: hold them too. Safe default — an unknown
+  // channel has no realtime guarantee, so the funds should not be withdrawable
+  // until an operator reviews them.
+  return true;
+}
+
 /** Build a normalized transaction record for storage/display. */
 function toTransaction(tx, provider, totalAmount) {
   return {
@@ -41,8 +63,18 @@ async function settle(invoice, tx) {
   if (rec.kind === 'subscription' && rec.reference) {
     await subscriptions.settleOrder(rec.reference).catch((e) => logActivity(rec.user_id, 'ERROR', `Settle order ${rec.reference} gagal: ${e.message}`));
   } else {
-    // kind = 'api' | 'test': credit the base_amount to the user's ledger (unique code stays as operator fee).
-    await ledger.credit(rec.user_id, rec.base_amount, { refType: 'invoice', refId: rec.id }).catch((e) => logActivity(rec.user_id, 'ERROR', `Ledger credit ${rec.id} gagal: ${e.message}`));
+    // kind = 'api' | 'test': credit the base_amount to the user's ledger
+    // (unique code stays as operator fee). Settlement speed follows the tier:
+    // H0 (realtime) lands directly in the balance; H1 (free) goes into HELD
+    // and only becomes withdrawable after the H+1 delay (see ledger.releaseDueHolds).
+    const isH1 = await isInvoiceH1(rec);
+    if (isH1) {
+      const releaseAt = new Date(Date.now() + H1_HOLD_HOURS * 3600000);
+      await ledger.creditHeld(rec.user_id, rec.base_amount, { refType: 'invoice', refId: rec.id, releaseAt })
+        .catch((e) => logActivity(rec.user_id, 'ERROR', `Hold credit ${rec.id} gagal: ${e.message}`));
+    } else {
+      await ledger.credit(rec.user_id, rec.base_amount, { refType: 'invoice', refId: rec.id }).catch((e) => logActivity(rec.user_id, 'ERROR', `Ledger credit ${rec.id} gagal: ${e.message}`));
+    }
   }
 
   // Webhook + callback (best-effort).
@@ -68,7 +100,13 @@ async function manualMarkPaid(userId, id, role, by = 'manual') {
   if (rec.kind === 'subscription' && rec.reference) {
     await subscriptions.settleOrder(rec.reference).catch((e) => logActivity(rec.user_id, 'ERROR', `Settle order ${rec.reference} gagal: ${e.message}`));
   } else {
-    await ledger.credit(rec.user_id, rec.base_amount, { refType: 'invoice', refId: rec.id }).catch((e) => logActivity(rec.user_id, 'ERROR', `Ledger credit ${rec.id} gagal: ${e.message}`));
+    // Same tier rule as settle(): H1 lands in HELD, H0 in the balance.
+    if (await isInvoiceH1(rec)) {
+      const releaseAt = new Date(Date.now() + H1_HOLD_HOURS * 3600000);
+      await ledger.creditHeld(rec.user_id, rec.base_amount, { refType: 'invoice', refId: rec.id, releaseAt }).catch((e) => logActivity(rec.user_id, 'ERROR', `Hold credit ${rec.id} gagal: ${e.message}`));
+    } else {
+      await ledger.credit(rec.user_id, rec.base_amount, { refType: 'invoice', refId: rec.id }).catch((e) => logActivity(rec.user_id, 'ERROR', `Ledger credit ${rec.id} gagal: ${e.message}`));
+    }
   }
   return trx;
 }
@@ -88,4 +126,14 @@ async function verifyInvoicePayment(invoice) {
   return null;
 }
 
-module.exports = { PaymentError, settle, manualMarkPaid, verifyInvoicePayment, toTransaction };
+/** Release a pending H+1 hold immediately (admin override). */
+async function listPendingHolds({ limit = 100 } = {}) {
+  const lim = Math.min(500, Math.max(1, Number(limit) || 100));
+  return db.query(
+    `SELECT h.id, h.user_id, u.email, h.invoice_id, h.amount, h.release_at, h.created_at
+     FROM settlement_holds h JOIN users u ON u.id = h.user_id
+     WHERE h.released = 0 ORDER BY h.release_at ASC LIMIT ?`, [lim]
+  );
+}
+
+module.exports = { PaymentError, settle, manualMarkPaid, verifyInvoicePayment, toTransaction, isInvoiceH1, listPendingHolds };

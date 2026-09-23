@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#060a18">
+<meta name="description" content="QRISPay — Payment gateway QRIS multi-provider untuk bot & website Indonesia. QRIS H+1 gratis, QRIS Realtime H+0, webhook, dan withdraw saldo otomatis.">
+<meta property="og:title" content="QRISPay — Payment Gateway QRIS untuk Bot & Website">
+<meta property="og:description" content="Terima pembayaran QRIS di bot Telegram, WhatsApp, atau website Anda. QRIS H+1 gratis, Realtime H+0 untuk paket prioritas.">
+<meta property="og:type" content="website">
+<title>QRISPay — Payment Gateway QRIS untuk Bot & Website</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/logo.svg">
+<link rel="stylesheet" href="/assets/app.css?v=14">
+<link rel="stylesheet" href="/landing.css?v=1">
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="nav" id="nav">
+      <a class="brand" href="#top">
+        <img src="/assets/logo.svg" alt="QRISPay">
+        QRISPay
+      </a>
+      <nav class="nav-links">
+        <a href="#fitur">Fitur</a>
+        <a href="#cara-kerja">Cara Kerja</a>
+        <a href="#harga">Harga</a>
+        <a href="#faq">FAQ</a>
+        <a href="/docs">Dokumentasi</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn sec" href="/login">Login</a>
+        <a class="btn" href="/register">Daftar Gratis</a>
+      </div>
+      <button class="burger" id="burger" aria-label="Menu"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ── HERO ── -->
+  <section class="hero">
+    <div class="wrap">
+      <span class="pill"><span class="dot"></span> Berlisensi QRIS · Multi-Provider</span>
+      <h1>Terima pembayaran <span class="grad">QRIS</span> di bot &amp; website Anda dalam hitungan menit</h1>
+      <p class="lead">
+        QRISPay adalah payment gateway QRIS untuk developer Indonesia. Buat invoice QRIS lewat satu API,
+        biarkan poller kami yang mendeteksi pembayaran masuk, dan tarik saldo Anda kapan saja.
+      </p>
+      <div class="hero-actions">
+        <a class="btn lg" href="/register">Mulai Gratis — Tanpa Kartu</a>
+        <a class="btn sec lg" href="/docs">Lihat Dokumentasi</a>
+      </div>
+      <div class="trust">
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Tidak ada biaya setup</span>
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> QRIS H+1 selamanya gratis</span>
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Webhook + polling</span>
+        <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Withdraw ke bank lokal</span>
+      </div>
+
+      <div class="mockup" style="margin-top: 52px;">
+        <div class="mockup-bar"><i></i><i></i><i></i></div>
+        <div class="mockup-body">
+<span class="c"># Buat invoice QRIS untuk bot Telegram kamu</span>
+curl -X POST <span class="s">https://pay.halogamingzone.com/api/v1/qris</span> \
+  -H <span class="s">"x-api-key: ***</span> \
+  -d <span class="o">'{"amount": 25000, "reference": "ORDER-1042"}'</span>
+
+<span class="c">→ 201 Created</span>
+{
+  <span class="k">"success"</span>: <span class="s">true</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"qris_id"</span>: <span class="s">"aB3k9xQz"</span>,
+    <span class="k">"amount"</span>: <span class="o">25077</span>,            <span class="c">// base + kode unik</span>
+    <span class="k">"qr_image_url"</span>: <span class="s">"/qr/aB3k9xQz?format=raw"</span>,
+    <span class="k">"settlement"</span>: { <span class="k">"speed"</span>: <span class="s">"H+1"</span>, <span class="k">"label"</span>: <span class="s">"H+1 (hari berikutnya)"</span> }
+  }
+}
+
+<span class="c"># Pembayaran terdeteksi otomatis — kamu dapat webhook</span>
+POST <span class="s">https://bot-kamu/webhook</span>
+{ <span class="k">"event"</span>: <span class="s">"payment.success"</span>, <span class="k">"qris_id"</span>: <span class="s">"aB3k9xQz"</span>, <span class="k">"amount"</span>: <span class="o">25077</span> }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STATS ── -->
+  <section style="padding-top: 10px;">
+    <div class="wrap">
+      <div class="stats">
+        <div><div class="num">&lt; 5 mnt</div><div class="lbl">Integrasi pertama sampai invoice pertama</div></div>
+        <div><div class="num">2</div><div class="lbl">Provider QRIS (QRIS &amp; Realtime)</div></div>
+        <div><div class="num">180</div><div class="lbl">Slot kode unik per nominal dasar</div></div>
+        <div><div class="num">5 mnt</div><div class="lbl">Invoice QRIS berlaku, grace window 10 mnt</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FITUR ── -->
+  <section id="fitur">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Semua yang dibutuhkan untuk terima QRIS</h2>
+        <p>Dari membuat invoice sampai saldo masuk ke rekening Anda — satu platform, satu API.</p>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2M4 7h16M4 7v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7M9 12h6"/></svg></div>
+          <h3>QRIS Dinamis Otomatis</h3>
+          <p>Setiap invoice mendapat QRIS dinamis dengan kode unik 21–200. Nominal selalu unik, jadi pembayaran tidak pernah tertukar dengan invoice lain — matching 100% otomatis.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg></div>
+          <h3>Deteksi Pembayaran Realtime</h3>
+          <p>Background poller memeriksa mutasi provider setiap beberapa detik, bahkan saat klien Anda berhenti polling. Pembayaran tetap terkonfirmasi tanpa webhook pun.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h19M6 15h4"/></svg></div>
+          <h3>Webhook &amp; Callback</h3>
+          <p>Setiap pembayaran sukses dikirim ke URL Anda dengan signature HMAC-SHA256 untuk verifikasi. Tidak ada webhook? Klien tetap bisa polling status publik.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
+          <h3>Ledger &amp; Withdraw</h3>
+          <p>Saldo tiap akun dilacak seperti buku kas — lengkap dengan audit trail. Ajukan withdraw ke bank lokal, admin memprosesnya langsung dari panel.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>Aman dari Awal</h3>
+          <p>API key di-hash, token provider dienkripsi, cookie session httpOnly. Idempotency terjaga — satu mutasi tidak akan pernah settle dua invoice.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg></div>
+          <h3>Dashboard Lengkap</h3>
+          <p>Statistik konversi, invoice, langganan, webhook, dan log aktivitas dalam satu tempat. Panel admin terpisah untuk kelola provider, user, dan withdraw.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CARA KERJA ── -->
+  <section id="cara-kerja" style="padding-top: 20px;">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Empat langkah, langsung jalan</h2>
+        <p>Tidak ada SDK yang harus di-install, tidak ada halaman redirect. Cukup satu POST.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h4>Buat API Key</h4>
+          <p>Daftar akun, buat API key dari dashboard. Langganan aktif dibutuhkan untuk membuat key.</p>
+        </div>
+        <div class="step">
+          <h4>POST /api/v1/qris</h4>
+          <p>Kirim nominal + reference. Gateway menambahkan kode unik dan mengembalikan gambar QRIS.</p>
+        </div>
+        <div class="step">
+          <h4>Tampilkan QRIS</h4>
+          <p>Tampilkan gambar QR ke pembeli — inline via URL <span class="mono">/qr/&lt;id&gt;</span> atau di halaman checkout kami.</p>
+        </div>
+        <div class="step">
+          <h4>Terima Webhook</h4>
+          <p>Poller mendeteksi pembayaran, settle invoice, lalu kirim <span class="mono">payment.success</span> ke URL Anda.</p>
+        </div>
+      </div>
+
+      <div class="row-feat" style="margin-top: 72px;">
+        <div>
+          <h2>Matching nominal yang tidak bisa salah</h2>
+          <p>Karena setiap invoice memiliki jumlah unik (base + kode unik), mutasi yang masuk langsung bisa dipetakan ke invoice yang benar. Klaim transaksi dilakukan secara atomik di database, jadi tidak mungkin satu pembayaran settle dua invoice sekaligus.</p>
+          <ul class="checks">
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Kode unik 21–200, dialokasikan otomatis</li>
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Idempotency claim <span class="mono">(provider, tx_id)</span></li>
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Grace window 10 menit untuk pembayaran terlambat</li>
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Mutasi tak ter-match masuk ke panel admin untuk rekonsiliasi</li>
+          </ul>
+        </div>
+        <div class="visual">
+          <div class="viz">
+            <div class="viz-code">
+<span class="c">// invoice Rp 25.000 → dialokasikan kode unik 77</span>
+invoice.total_amount = <span class="o">25000</span> + <span class="o">77</span> = <span class="s">25077</span>
+
+<span class="c">// mutasi masuk dari provider</span>
+mutation.txId  = <span class="s">"2026092112345678"</span>
+mutation.amount = <span class="s">25077</span>  <span class="c">// → match! claim (provider, txId)</span>
+mutation.status = <span class="s">"SETTLEMENT"</span>
+
+<span class="c">// settle invoice</span>
+invoices.setStatus(<span class="s">"aB3k9xQz"</span>, <span class="s">"PAID"</span>)
+ledger.credit(user, <span class="o">25000</span>)  <span class="c">// unik jadi fee operator</span>
+            </div>
+            <div class="viz-meta">
+              <div><div class="lbl">Diterima</div><div class="val">Rp 25.000</div></div>
+              <div><div class="lbl">Fee</div><div class="val">Rp 77</div></div>
+              <div><div class="lbl">Status</div><div class="val" style="color:#6ee7b7">PAID</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row-feat flip" style="margin-top: 64px;">
+        <div>
+          <h2>Dua kecepatan settlement</h2>
+          <p>Pilih jalur sesuai kebutuhan. QRIS standar (H+1) gratis untuk semua user — saldo masuk ke <em>held</em> dan dirilis otomatis setiap hari jam 17:00 WIB. QRIS Realtime (H+0) langsung masuk ke saldo untuk pelanggan paket prioritas.</p>
+          <ul class="checks">
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> <b>QRIS (H+1)</b> — gratis, untuk semua user, dirilis tiap 17:00 WIB</li>
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> <b>QRIS Realtime (H+0)</b> — seketika, khusus paket prioritas</li>
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Routing otomatis ke provider yang sehat</li>
+            <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Nama provider internal tidak pernah bocor ke klien Anda</li>
+          </ul>
+        </div>
+        <div class="visual">
+          <div class="viz">
+            <div style="display:flex; flex-direction:column; gap:14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 16px; border:1px solid var(--line); border-radius:12px; background:rgba(5,9,18,.5);">
+                <div>
+                  <div style="font-weight:700; font-size:14.5px;">QRIS</div>
+                  <div style="color:var(--muted); font-size:12.5px; margin-top:2px;">H+1 (hari berikutnya)</div>
+                </div>
+                <span class="badge ok">GRATIS</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 16px; border:1px solid rgba(99,102,241,.4); border-radius:12px; background:rgba(99,102,241,.07);">
+                <div>
+                  <div style="font-weight:700; font-size:14.5px;">QRIS Realtime</div>
+                  <div style="color:var(--muted); font-size:12.5px; margin-top:2px;">H+0 (seketika)</div>
+                </div>
+                <span class="badge">PRIORITAS</span>
+              </div>
+              <div style="color:var(--muted2); font-size:12.5px; padding:0 2px;">
+                Saldo H+1 masuk ke <b>held</b> dulu — tidak bisa ditarik sebelum dirilis. Release otomatis tiap hari 17:00 WIB, atau lewat admin.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── HARGA ── -->
+  <section id="harga">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Harga transparan</h2>
+        <p>Bayar hanya kalau butuh kecepatan. Paket QRIS H+1 selamanya gratis.</p>
+      </div>
+      <div class="plans">
+        <div class="card plan">
+          <div class="name">Gratis</div>
+          <div class="price">Rp 0</div>
+          <div class="per">selamanya</div>
+          <ul>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> QRIS (H+1) tanpa batas</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> API key + webhook</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Dashboard + ledger + withdraw</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Saldo cair tiap hari 17:00 WIB</li>
+          </ul>
+          <a class="btn sec" href="/register">Daftar Sekarang</a>
+        </div>
+        <div class="card plan featured">
+          <span class="tag">Paling Populer</span>
+          <div class="name">Bulanan H+0</div>
+          <div class="price">Rp 30.000<small>/bln</small></div>
+          <div class="per">bisa berlangganan lewat QRIS di dashboard</div>
+          <ul>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Semua yang ada di paket Gratis</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> <b>QRIS Realtime (H+0)</b> — saldo seketika</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Provider prioritas</li>
+            <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Aktif 30 hari, perpanjang kapan saja</li>
+          </ul>
+          <a class="btn" href="/register">Coba Prioritas</a>
+        </div>
+      </div>
+      <p class="hint" style="text-align:center; margin-top:22px; color:var(--muted2); font-size:13px;">
+        Tidak ada biaya per transaksi. Kode unik (Rp 21–200 per invoice) menjadi fee operator.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── FAQ ── -->
+  <section id="faq">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Pertanyaan yang sering ditanya</h2>
+      </div>
+      <div class="faq">
+        <details open>
+          <summary>Apa itu H+1 dan H+0?</summary>
+          <p><b>H+1</b> artinya saldo dari pembayaran QRIS masuk ke status ditahan (held) dulu, baru bisa ditarik keesokan harinya — QRISPay melepaskannya otomatis setiap hari jam 17:00 WIB. Ini adalah jalur gratis untuk semua user. <b>H+0</b> (Realtime) berarti saldo langsung bisa dipakai begitu pembayaran terdeteksi, tanpa menunggu — ini butuh paket prioritas.</p>
+        </details>
+        <details>
+          <summary>Apakah saya butuh webhook?</summary>
+          <p>Tidak wajib. Klien Anda bisa polling <span class="mono">GET /api/v1/qris/:id/status</span> tiap 3–5 detik — saat masih PENDING, gateway otomatis memeriksa mutasi provider dan menyelesaikan invoice. Tapi webhook sangat disarankan untuk reliabilitas: pembayaran tetap terkonfirmasi meski klien berhenti polling.</p>
+        </details>
+        <details>
+          <summary>Bagaimana jika pembayaran terlambat atau QR sudah expired?</summary>
+          <p>Invoice QRIS berlaku 5 menit. Ada grace window 10 menit setelah expiry — selama itu, pembayaran yang masuk tetap akan di-match dan invoice di-settle. Setelahnya, mutasi masuk tanpa invoice cocok akan tercatat di panel admin sebagai <b>unmatched payment</b> untuk direkonsiliasi manual.</p>
+        </details>
+        <details>
+          <summary>Bisa untuk bot Telegram / WhatsApp?</summary>
+          <p>Bisa, itu justru tujuan utamanya. Bot Anda cukup memanggil <span class="mono">POST /api/v1/qris</span> lalu mengirim gambar QR (URL publik <span class="mono">/qr/&lt;id&gt;</span>) ke pembeli. Saat webhook <span class="mono">payment.success</span> masuk, bot mengirim barang/langganan. Tidak ada SDK, tidak ada redirect browser.</p>
+        </details>
+        <details>
+          <summary>Kenapa nominal QRIS tidak persis sama dengan yang saya kirim?</summary>
+          <p>Karena gateway menambahkan <b>kode unik</b> (Rp 21–200) ke nominal dasar. Inilah yang memungkinkan matching otomatis: setiap invoice memiliki jumlah yang unik, sehingga mutasi yang masuk bisa dipetakan ke invoice yang tepat tanpa metadata tambahan dari provider.</p>
+        </details>
+        <details>
+          <summary>Bagaimana cara withdraw saldo?</summary>
+          <p>Dari menu <b>Saldo &amp; Withdraw</b> di dashboard, masukkan nominal dan detail bank (nama bank, nomor rekening, nama pemilik). Saldo langsung ditahan (held) dan muncul sebagai permintaan withdraw di panel admin untuk diproses atau ditolak.</p>
+        </details>
+        <details>
+          <summary>Apa yang terjadi kalau provider sedang down?</summary>
+          <p>Gateway memantau kesehatan tiap provider. Saat membuat invoice, routing otomatis memilih provider yang sehat; kalau pilihan Anda sedang tidak tersedia, jatuh ke provider lain tanpa menolak request. Status koneksi provider terlihat di panel admin.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA ── -->
+  <section>
+    <div class="wrap">
+      <div class="cta-band">
+        <h2>Siap menerima pembayaran QRIS pertama Anda?</h2>
+        <p>Daftar gratis, buat API key, dan kirim invoice pertama dalam waktu kurang dari 5 menit. Tidak ada biaya setup, tidak ada kartu kredit.</p>
+        <div class="hero-actions" style="margin-bottom: 0;">
+          <a class="btn lg" href="/register">Daftar Gratis Sekarang</a>
+          <a class="btn sec lg" href="/docs">Baca Dokumentasi API</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top" style="font-size:16px;">
+          <img src="/assets/logo.svg" alt="QRISPay" style="width:28px;height:28px;border-radius:8px;"> QRISPay
+        </a>
+        <p>Payment gateway QRIS multi-provider untuk bot &amp; website developer Indonesia. QRIS H+1 gratis, Realtime H+0 untuk prioritas.</p>
+      </div>
+      <div>
+        <h4>Produk</h4>
+        <ul>
+          <li><a href="#fitur">Fitur</a></li>
+          <li><a href="#harga">Harga</a></li>
+          <li><a href="#cara-kerja">Cara Kerja</a></li>
+          <li><a href="/docs">Dokumentasi API</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Akun</h4>
+        <ul>
+          <li><a href="/register">Daftar</a></li>
+          <li><a href="/login">Login</a></li>
+          <li><a href="/app">Dashboard</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>API</h4>
+        <ul>
+          <li><a href="/docs">POST /api/v1/qris</a></li>
+          <li><a href="/docs">GET status &amp; polling</a></li>
+          <li><a href="/docs">Webhook</a></li>
+          <li><a href="/api/v1/healthz">Health check</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bot">
+      <span>&copy; <span id="year">2026</span> QRISPay. Semua hak dilindungi.</span>
+      <span>QRIS adalah merek dagang Bank Indonesia.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
+const burger = document.getElementById('burger');
+const nav = document.getElementById('nav');
+if (burger) burger.onclick = () => nav.classList.toggle('open');
+document.querySelectorAll('.nav-links a').forEach((a) => a.addEventListener('click', () => nav.classList.remove('open')));
+</script>
+</body>
+</html>

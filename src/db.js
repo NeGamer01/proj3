@@ -177,6 +177,21 @@ const SCHEMA = [
     CONSTRAINT fk_ub_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 
+  // Settlement holds: H+1 payments are credited to `held` (not withdrawable)
+  // until release_at, when the scheduler moves them to the balance.
+  `CREATE TABLE IF NOT EXISTS settlement_holds (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    invoice_id VARCHAR(16) NOT NULL,
+    amount INT NOT NULL,
+    release_at DATETIME(3) NOT NULL,
+    released TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    UNIQUE KEY uq_sh_invoice (invoice_id),
+    INDEX idx_sh_release (released, release_at),
+    CONSTRAINT fk_sh_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
   // Ledger entries (audit trail). balance_after is snapshot after each entry.
   `CREATE TABLE IF NOT EXISTS ledger_entries (
     id INT AUTO_INCREMENT PRIMARY KEY,

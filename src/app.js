@@ -18,15 +18,17 @@ function createApp() {
   app.use('/assets', express.static(path.join(pub, 'assets'), { maxAge: '5m' }));
   app.get('/qris.css', (_req, res) => res.sendFile(path.join(pub, 'qris.css')));
   app.get('/qris.js', (_req, res) => res.sendFile(path.join(pub, 'qris.js')));
+  app.get('/landing.css', (_req, res) => res.sendFile(path.join(pub, 'landing.css'), { maxAge: '5m' }));
 
   // pages
   const page = (file) => (_req, res) => res.sendFile(path.join(pub, file));
-  app.get('/', (req, res) => (req.user ? res.redirect(req.user.role === 'admin' ? '/admin' : '/app') : res.sendFile(path.join(pub, 'index.html'))));
+  app.get('/', (req, res) => (req.user ? res.redirect(req.user.role === 'admin' ? '/admin' : '/app') : res.sendFile(path.join(pub, 'landing.html'))));
   app.get('/login', page('index.html'));
   app.get('/register', page('index.html'));
   app.get('/app', (req, res) => (req.user ? res.sendFile(path.join(pub, 'app.html')) : res.redirect('/login')));
   app.get('/admin', (req, res) => (req.user?.role === 'admin' ? res.sendFile(path.join(pub, 'admin.html')) : res.redirect('/login')));
   app.get('/docs', page('docs.html'));
+  app.get('/landing', page('landing.html')); // preview langsung bahkan untuk user yang sudah login
 
   // APIs
   app.use(require('./routes/api'));

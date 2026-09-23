@@ -322,6 +322,21 @@ router.get('/withdrawals', wrap(async (req, res) => res.json({ success: true, da
 router.post('/withdrawals/:id/process', wrap(async (req, res) => res.json({ success: true, data: await withdrawals.process(strid(req.params.id), req.user.email) })));
 router.post('/withdrawals/:id/reject', wrap(async (req, res) => res.json({ success: true, data: await withdrawals.reject(strid(req.params.id), req.body?.reason, req.user.email) })));
 
+// ── H+1 settlement holds (list / force-release) ──
+router.get('/holds', wrap(async (req, res) => res.json({ success: true, data: await payments.listPendingHolds({ limit: req.query.limit || 100 }) })));
+router.post('/holds/release-all', wrap(async (req, res) => {
+  // Emergency sweep: release every unreleased hold right now, like the daily
+  // 17:00 WIB job would. Use with care — it ignores the H+1 age entirely.
+  const r = await ledger.releaseDueHolds({ mode: 'all', limit: 1000 });
+  logActivity(req.user.id, 'WARNING', `Sweep manual hold: ${r.released_count} dirilis (Rp ${r.total_amount})`);
+  res.json({ success: true, data: r });
+}));
+router.post('/holds/:invoiceId/release', wrap(async (req, res) => {
+  const invoiceId = String(strid(req.params.invoiceId));
+  const r = await ledger.releaseHoldNow(invoiceId, { note: `oleh admin ${req.user.email}` });
+  res.json({ success: true, data: r });
+}));
+
 // ── unmatched payments (admin reconcile) ──
 router.get('/unmatched', wrap(async (req, res) => {
   const lim = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
