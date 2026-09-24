@@ -52,7 +52,8 @@ async function requireApiKey(req, res, next) {
   const info = await apikeys.resolve(String(key || ''));
   if (!info) return res.status(401).json({ success: false, code: 'INVALID_API_KEY', message: 'API key tidak valid' });
   if (info.status !== 'active') return res.status(403).json({ success: false, code: 'ACCOUNT_BLOCKED', message: 'Akun diblokir' });
-  if (!info.subscription_active) return res.status(403).json({ success: false, code: 'SUBSCRIPTION_EXPIRED', message: 'Langganan tidak aktif. Perpanjang di dashboard.' });
+  // Note: an expired/absent subscription does NOT invalidate a key. It only
+  // degrades the tier (QRIS H+1 only); see subs.allowedProviders below.
   if (rateLimited(info.key_id)) return res.status(429).json({ success: false, code: 'RATE_LIMITED', message: `Maksimal ${config.rateLimitPerMinute} request/menit` });
   // Resolve allowed providers from subscription tier (free = shopeepay only, paid = plan providers).
   const allowed = await subs.allowedProviders(info.user_id, info.role);

@@ -118,8 +118,8 @@ router.post('/withdrawals/:id/cancel', wrap(async (req, res) => res.json({ succe
 // ── API keys ──
 router.get('/keys', wrap(async (req, res) => res.json({ success: true, data: await apikeys.list(req.user.id) })));
 router.post('/keys', wrap(async (req, res) => {
-  const sub = await subs.subscriptionStatus(req.user.id, req.user.role);
-  if (!sub.active) return res.status(403).json({ success: false, code: 'SUBSCRIPTION_REQUIRED', message: 'Aktifkan langganan dulu untuk membuat API key' });
+  // API keys are free for every account — the subscription only gates the
+  // settlement speed (QRIS H+0 realtime). See apikeys.create for the 5-key cap.
   const k = await apikeys.create(req.user.id, req.body?.label);
   logActivity(req.user.id, 'INFO', `API key dibuat (${k.key_prefix})`);
   res.status(201).json({ success: true, data: k });

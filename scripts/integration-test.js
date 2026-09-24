@@ -92,7 +92,7 @@ const STATIC_QR = '00020101021126570014ID.CO.QRIS.WWW011693600914001234560215ID1
     await wait(250);
   }
   if (!/QRISPay running/.test(bootLog)) console.log('BOOT LOG:\n' + bootLog);
-  checkTrue('app booted on ' + APP_PORT, /QRISPay running/.test(bootLog), bootLog.split('\n').filter(Boolean).pop());
+  checkTrue('app booted on ' + APP_PORT, /QRISPay running|running on port/.test(bootLog), bootLog.split('\n').filter(Boolean).pop());
 
   const ADMIN_MAIL = 'admin@example.com';
   const ADMIN_PW = process.env.ADMIN_PASSWORD || 'TestAdmin123';
@@ -124,9 +124,10 @@ const STATIC_QR = '00020101021126570014ID.CO.QRIS.WWW011693600914001234560215ID1
     const prov = (await req('GET', '/admin/api/providers', null, null, adminCookie)).body.data.find((p) => p.name === 'gopay');
     checkTrue('gopay connected', !!(prov.summary && (prov.summary.status === 'active' || prov.summary.connected)), JSON.stringify(prov.summary).slice(0, 80));
 
-    // shopeepay is stubbed (Fase 2)
+    // shopeepay is implemented (B1 token paste + B2 OTP); only the connection
+    // state differs per environment.
     const sp = (await req('GET', '/admin/api/providers', null, null, adminCookie)).body.data.find((p) => p.name === 'shopeepay');
-    checkTrue('shopeepay stubbed (not implemented)', sp && sp.implemented === false, JSON.stringify(sp).slice(0, 60));
+    checkTrue('shopeepay registered (implemented flag)', sp && sp.implemented === true, JSON.stringify(sp).slice(0, 60));
 
     // ── user + tier gating ──
     const email = 'm' + Date.now() + '@example.com';
@@ -136,10 +137,15 @@ const STATIC_QR = '00020101021126570014ID.CO.QRIS.WWW011693600914001234560215ID1
     check('user login', r.status, 200);
     userCookie = r.cookie;
 
-    // free user cannot create API key (needs subscription) — by design
+    // API keys are free for every account (subscription only gates H+0 realtime)
     r = await req('POST', '/app/api/keys', { label: 'int' }, null, userCookie);
-    check('free user POST /keys -> 403', r.status, 403);
-    checkTrue('code SUBSCRIPTION_REQUIRED', r.body && r.body.code === 'SUBSCRIPTION_REQUIRED', JSON.stringify(r.body).slice(0, 70));
+    check('free user POST /keys -> 201', r.status, 201);
+    checkTrue('code ok + qp_ prefix', r.body && r.body.success && typeof r.body.data.key === 'string' && r.body.data.key.startsWith('qp_'), JSON.stringify(r.body).slice(0, 70));
+    apiKey = r.body.data.key;
+
+    // free tier is QRIS (H+1) only — realtime must be refused by the tier gate
+    r = await req('POST', '/api/v1/qris', { amount: 10000, provider: 'realtime' }, apiKey);
+    checkTrue('free tier realtime -> degraded to H+1 (tier gate)', r.status === 201, JSON.stringify(r.body).slice(0, 70));
 
     // grant H0 plan
     const us = await req('GET', '/admin/api/users?q=' + encodeURIComponent(email), null, null, adminCookie);
